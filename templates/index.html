@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SEO / GEO Article Writer Demo</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Flask Demo</p>
+          <h1>SEO / GEO AI 写作演示台</h1>
+          <p class="intro">
+            输入类别、多个关键词和品牌/产品信息，系统会异步生成文章草稿，并对
+            `category + keyword + info` 做单词级缓存。
+          </p>
+          <div class="status-row">
+            <span class="badge {{ 'badge-live' if llm_enabled else 'badge-mock' }}">
+              {{ 'LLM 已连接' if llm_enabled else 'Mock 模式' }}
+            </span>
+            <span class="badge badge-muted">API: `/api/tasks` + `/api/tasks/&lt;id&gt;`</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <form id="task-form" class="form-grid">
+          <label>
+            <span>类别</span>
+            <select name="category" required>
+              <option value="seo">SEO</option>
+              <option value="geo">GEO</option>
+            </select>
+          </label>
+
+          <label>
+            <span>语言</span>
+            <input type="text" name="language" value="English">
+          </label>
+
+          <label class="full">
+            <span>关键词（支持多条）</span>
+            <textarea
+              name="keywords"
+              rows="5"
+              placeholder="portable charger on plane&#10;tsa power bank rules&#10;best travel charger"
+              required
+            ></textarea>
+          </label>
+
+          <label class="full">
+            <span>品牌 / 产品信息</span>
+            <textarea
+              name="info"
+              rows="6"
+              placeholder="Brand: VoltGo&#10;Product: 20000mAh portable charger&#10;Highlights: airline-safe, fast charging, digital display"
+            ></textarea>
+          </label>
+
+          <label class="checkbox-row">
+            <input type="checkbox" name="force_refresh" value="true">
+            <span>忽略缓存，强制重新生成</span>
+          </label>
+
+          <div class="actions">
+            <button type="submit">开始生成</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>任务状态</h2>
+          <p id="task-meta">还没有任务。</p>
+        </div>
+        <div id="summary" class="summary"></div>
+        <div id="results" class="results"></div>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById("task-form");
+      const taskMeta = document.getElementById("task-meta");
+      const summary = document.getElementById("summary");
+      const results = document.getElementById("results");
+      let pollTimer = null;
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+      }
+
+      function renderTask(task) {
+        const progress = task.progress || {};
+        taskMeta.textContent = `任务 ${task.task_id} · ${task.status}`;
+        summary.innerHTML = `
+          <div class="summary-card"><strong>${progress.total || 0}</strong><span>关键词数</span></div>
+          <div class="summary-card"><strong>${progress.completed || 0}</strong><span>已完成</span></div>
+          <div class="summary-card"><strong>${progress.cached || 0}</strong><span>缓存命中</span></div>
+          <div class="summary-card"><strong>${progress.failed || 0}</strong><span>失败</span></div>
+        `;
+
+        results.innerHTML = (task.items || []).map((item) => {
+          const article = item.article || {};
+          return `
+            <article class="result-card">
+              <div class="result-head">
+                <h3>${escapeHtml(item.keyword)}</h3>
+                <div class="tags">
+                  <span class="badge badge-muted">${escapeHtml(item.status)}</span>
+                  ${item.cache_hit ? '<span class="badge badge-cache">cache</span>' : ''}
+                  ${article.generation_mode ? `<span class="badge badge-live">${escapeHtml(article.generation_mode)}</span>` : ''}
+                </div>
+              </div>
+              ${item.error ? `<p class="error">${escapeHtml(item.error)}</p>` : ""}
+              ${article.title ? `
+                <div class="meta-block">
+                  <p><strong>Title:</strong> ${escapeHtml(article.title)}</p>
+                  <p><strong>Meta Title:</strong> ${escapeHtml(article.meta_title)}</p>
+                  <p><strong>Meta Description:</strong> ${escapeHtml(article.meta_description)}</p>
+                </div>
+                <details>
+                  <summary>查看 HTML</summary>
+                  <pre>${escapeHtml(article.html)}</pre>
+                </details>
+              ` : '<p class="pending">等待生成结果…</p>'}
+            </article>
+          `;
+        }).join("");
+      }
+
+      async function loadTask(taskId) {
+        const response = await fetch(`/api/tasks/${taskId}`);
+        const payload = await response.json();
+        if (!payload.success) {
+          taskMeta.textContent = payload.message || "任务读取失败";
+          return;
+        }
+        renderTask(payload.data);
+        if (!["completed", "failed", "partial_failed"].includes(payload.data.status)) {
+          pollTimer = setTimeout(() => loadTask(taskId), 1500);
+        }
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        clearTimeout(pollTimer);
+        results.innerHTML = "";
+        summary.innerHTML = "";
+        taskMeta.textContent = "任务提交中...";
+
+        const formData = new FormData(form);
+        const payload = {
+          category: formData.get("category"),
+          language: formData.get("language"),
+          keywords: formData.get("keywords"),
+          info: formData.get("info"),
+          force_refresh: formData.get("force_refresh") === "true",
+        };
+
+        const response = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!data.success) {
+          taskMeta.textContent = data.message || "任务创建失败";
+          return;
+        }
+        taskMeta.textContent = `任务 ${data.data.task_id} 已创建`;
+        loadTask(data.data.task_id);
+      });
+    </script>
+  </body>
+</html>
+
