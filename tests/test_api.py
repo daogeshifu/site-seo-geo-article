@@ -40,3 +40,8 @@ def test_create_task_and_fetch_result(tmp_path: Path) -> None:
     assert status == "completed"
     assert task_payload is not None
     assert task_payload["items"][0]["article"]["generation_mode"] == "mock"
+    assert len(task_payload["items"][0]["article"]["images"]) >= 3
+
+    image_url = task_payload["items"][0]["article"]["images"][0]["url"]
+    image_response = client.get(image_url)
+    assert image_response.status_code == 200

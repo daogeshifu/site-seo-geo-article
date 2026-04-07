@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 
-def render_demo_page(*, llm_enabled: bool) -> str:
+def render_demo_page(*, llm_enabled: bool, image_enabled: bool, image_mode: str) -> str:
     llm_label = "Live LLM" if llm_enabled else "Mock Mode"
     llm_badge_class = "badge-live" if llm_enabled else "badge-mock"
     llm_tip = (
         "Real model calls are enabled. The generated output comes from your configured OpenAI-compatible endpoint."
         if llm_enabled
         else "No API key is configured, so the demo is currently using mock article output for safe local testing."
+    )
+    image_label = "Azure Images" if image_enabled else "Mock Images"
+    image_badge_class = "badge-live" if image_enabled else "badge-mock"
+    image_tip = (
+        "Azure OpenAI image generation is active. Each article can create one cover plus 2-3 supporting images."
+        if image_enabled
+        else "Azure image credentials are not configured, so the app will generate local SVG mock images for demo use."
     )
 
     html = """<!doctype html>
@@ -231,6 +238,11 @@ def render_demo_page(*, llm_enabled: bool) -> str:
       gap: 20px;
     }}
 
+    .section-stack {{
+      display: grid;
+      gap: 20px;
+    }}
+
     .card {{
       border-radius: var(--radius);
       border: 1px solid var(--line);
@@ -445,6 +457,51 @@ def render_demo_page(*, llm_enabled: bool) -> str:
       gap: 14px;
     }}
 
+    .shell-tabs {{
+      margin-top: 10px;
+    }}
+
+    .shell-tab-buttons {{
+      display: inline-flex;
+      gap: 6px;
+      padding: 6px;
+      border-radius: 14px;
+      background: rgba(15,23,42,0.05);
+      border: 1px solid var(--line);
+      margin-bottom: 16px;
+    }}
+
+    .shell-tab-button {{
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      padding: 9px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+    }}
+
+    .shell-tab-button.active {{
+      background: white;
+      color: var(--text);
+      box-shadow: 0 6px 16px rgba(15,23,42,0.08);
+    }}
+
+    .shell-tab-panel {{
+      display: none;
+    }}
+
+    .shell-tab-panel.active {{
+      display: block;
+    }}
+
+    .api-surface {{
+      border-radius: 18px;
+      overflow: hidden;
+    }}
+
     .result-card {{
       border-radius: 20px;
       border: 1px solid var(--line);
@@ -581,6 +638,100 @@ def render_demo_page(*, llm_enabled: bool) -> str:
       padding-left: 18px;
     }}
 
+    .preview-surface img.article-generated-image {{
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      margin: 16px 0;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      box-shadow: 0 10px 26px rgba(15,23,42,0.08);
+      background: #e2e8f0;
+    }}
+
+    .image-toolbar {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      grid-column: 1 / -1;
+    }}
+
+    .gallery {{
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }}
+
+    .gallery-card {{
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.92);
+    }}
+
+    .gallery-card img {{
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      object-fit: cover;
+      background: #e2e8f0;
+    }}
+
+    .gallery-card-body {{
+      padding: 12px;
+    }}
+
+    .gallery-card-body strong {{
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text);
+    }}
+
+    .gallery-card-body p {{
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.55;
+    }}
+
+    .loading-card {{
+      display: grid;
+      place-items: center;
+      min-height: 220px;
+      border-radius: 22px;
+      border: 1px dashed rgba(15,23,42,0.12);
+      background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.84) 100%);
+      color: var(--muted);
+      text-align: center;
+      padding: 24px;
+    }}
+
+    .spinner {{
+      width: 48px;
+      height: 48px;
+      border-radius: 999px;
+      border: 4px solid rgba(14,165,233,0.14);
+      border-top-color: var(--accent-2);
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 14px;
+    }}
+
+    .loading-card strong {{
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text);
+      font-size: 15px;
+    }}
+
+    @keyframes spin {{
+      to {{ transform: rotate(360deg); }}
+    }}
+
     pre {{
       white-space: pre-wrap;
       word-break: break-word;
@@ -617,6 +768,9 @@ def render_demo_page(*, llm_enabled: bool) -> str:
       }}
       .summary-grid {{
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }}
+      .gallery {{
+        grid-template-columns: 1fr;
       }}
     }}
 
@@ -659,13 +813,14 @@ def render_demo_page(*, llm_enabled: bool) -> str:
       <div class="hero-grid">
         <div>
           <div class="eyebrow">Open Source • SEO + GEO • Async Tasks</div>
-          <h1>Generate SEO and GEO articles from keywords, product context, and reusable cache.</h1>
+          <h1>Create one article per keyword, guided by brand context, cache reuse, and optional images.</h1>
           <p>
             This demo is designed as a clean product-style console: it lets you submit jobs, poll results,
             preview generated HTML, and understand how the API works without leaving the page.
           </p>
           <div class="hero-badges">
             <span class="badge __LLM_BADGE_CLASS__">__LLM_LABEL__</span>
+            <span class="badge __IMAGE_BADGE_CLASS__">__IMAGE_LABEL__</span>
             <span class="badge badge-neutral">POST /api/tasks</span>
             <span class="badge badge-neutral">GET /api/tasks/&lt;task_id&gt;</span>
             <span class="badge badge-neutral">Keyword-level cache</span>
@@ -677,167 +832,219 @@ def render_demo_page(*, llm_enabled: bool) -> str:
             <li>SEO mode follows title, meta, outline, FAQ, and readability constraints.</li>
             <li>GEO mode focuses on answer-first structure, citability, trust signals, and entity clarity.</li>
             <li>__LLM_TIP__</li>
+            <li>__IMAGE_TIP__</li>
           </ul>
         </aside>
       </div>
     </section>
 
-    <section class="grid">
-      <div class="stack">
-        <article class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <strong>Create Task</strong>
-              <span>Submit one or more keywords and generate article drafts asynchronously.</span>
+    <section class="section-stack">
+      <article class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <strong>Create Task</strong>
+            <span>Submit one or more keywords and generate article drafts asynchronously.</span>
+          </div>
+          <span class="pill">Demo Console</span>
+        </div>
+        <div class="card-body">
+          <form id="task-form" class="form-grid">
+            <label>
+              Category
+              <select name="category" required>
+                <option value="seo">SEO</option>
+                <option value="geo">GEO</option>
+              </select>
+            </label>
+            <label>
+              Language
+              <input type="text" name="language" value="English" />
+            </label>
+            <label class="full">
+              Keywords
+              <textarea name="keywords" rows="5" required placeholder="portable charger on plane&#10;tsa power bank rules&#10;best travel charger for flights"></textarea>
+            </label>
+            <label class="full">
+              Brand / Product Info
+              <textarea name="info" rows="6" placeholder="Brand: VoltGo&#10;Product: 20000mAh portable charger&#10;Highlights: airline-safe, fast charging, digital display"></textarea>
+            </label>
+            <div class="image-toolbar">
+              <label class="toggle">
+                <input type="checkbox" name="generate_images" value="true" checked />
+                Generate cover + content images
+              </label>
+              <span class="pill">1 cover + 2-3 body images</span>
             </div>
-            <span class="pill">Demo Console</span>
-          </div>
-          <div class="card-body">
-            <form id="task-form" class="form-grid">
-              <label>
-                Category
-                <select name="category" required>
-                  <option value="seo">SEO</option>
-                  <option value="geo">GEO</option>
-                </select>
-              </label>
-              <label>
-                Language
-                <input type="text" name="language" value="English" />
-              </label>
-              <label class="full">
-                Keywords
-                <textarea name="keywords" rows="5" required placeholder="portable charger on plane&#10;tsa power bank rules&#10;best travel charger for flights"></textarea>
-              </label>
-              <label class="full">
-                Brand / Product Info
-                <textarea name="info" rows="6" placeholder="Brand: VoltGo&#10;Product: 20000mAh portable charger&#10;Highlights: airline-safe, fast charging, digital display"></textarea>
-              </label>
-              <label class="toggle full">
-                <input type="checkbox" name="force_refresh" value="true" />
-                Force refresh and ignore cache for this run
-              </label>
-              <div class="actions">
-                <button class="btn btn-primary" type="submit">Start Task</button>
-                <button class="btn btn-ghost" type="button" id="clear-results">Clear Panel</button>
-              </div>
-            </form>
-          </div>
-        </article>
+            <label class="toggle full">
+              <input type="checkbox" name="force_refresh" value="true" />
+              Force refresh and ignore cache for this run
+            </label>
+            <div class="actions">
+              <button class="btn btn-primary" type="submit" id="submit-btn">Start Task</button>
+              <button class="btn btn-ghost" type="button" id="clear-results">Clear Panel</button>
+            </div>
+          </form>
+        </div>
+      </article>
 
-        <article class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <strong>Writing Model</strong>
-              <span>Two different content strategies are used depending on the selected category.</span>
+      <section class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <strong>Task Result</strong>
+            <span>Status, article output, and raw API payload appear here.</span>
+          </div>
+          <span id="task-meta" class="pill">No active task</span>
+        </div>
+        <div class="card-body">
+          <div id="summary" class="summary-grid">
+            <div class="summary-card"><strong>0</strong><span>Total</span></div>
+            <div class="summary-card"><strong>0</strong><span>Completed</span></div>
+            <div class="summary-card"><strong>0</strong><span>Cached</span></div>
+            <div class="summary-card"><strong>0</strong><span>Failed</span></div>
+          </div>
+          <div class="shell-tabs">
+            <div class="shell-tab-buttons">
+              <button class="shell-tab-button active" type="button" data-shell-tab="articles">Article Results</button>
+              <button class="shell-tab-button" type="button" data-shell-tab="api">API Response</button>
+            </div>
+            <div class="shell-tab-panel active" data-shell-panel="articles">
+              <div id="results" class="results">
+                <div class="empty">Submit a task to preview generated SEO or GEO article output.</div>
+              </div>
+            </div>
+            <div class="shell-tab-panel" data-shell-panel="api">
+              <div class="api-surface">
+                <pre id="api-json" class="code-block">{}</pre>
+              </div>
             </div>
           </div>
-          <div class="card-body">
-            <div class="mini-grid">
-              <div class="mini-card">
-                <strong>SEO</strong>
-                <p>Intent analysis, meta structure, H1/H2/H3 outline, long-tail coverage, conclusion, and FAQ.</p>
-              </div>
-              <div class="mini-card">
-                <strong>GEO</strong>
-                <p>Answer-first layout, extractable headings, proof blocks, references, trust cues, and entity alignment.</p>
-              </div>
-              <div class="mini-card">
-                <strong>Cache</strong>
-                <p>Each keyword is cached independently using category + normalized keyword + normalized brand info.</p>
-              </div>
-            </div>
-            <div class="inline-list">
-              <span>SEO title/meta rules</span>
-              <span>GEO answer-first</span>
-              <span>FAQ blocks</span>
-              <span>Async task polling</span>
-              <span>Reusable article cache</span>
-            </div>
-          </div>
-        </article>
-      </div>
+        </div>
+      </section>
 
-      <div class="stack">
-        <article class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <strong>How It Works</strong>
-              <span>The page doubles as a product demo and a developer quickstart.</span>
+      <section class="grid">
+        <div class="stack">
+          <article class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <strong>Writing Model</strong>
+                <span>Two different content strategies are used depending on the selected category.</span>
+              </div>
             </div>
-          </div>
-          <div class="card-body">
-            <div class="doc-block">
-              <h3>1. Submit a job</h3>
-              <p>Send category, keywords, and brand context to the task API.</p>
-              <pre class="code-block">curl -X POST http://127.0.0.1:5000/api/tasks \\
+            <div class="card-body">
+              <div class="mini-grid">
+                <div class="mini-card">
+                  <strong>SEO</strong>
+                  <p>Intent analysis, meta structure, H1/H2/H3 outline, long-tail coverage, conclusion, and FAQ.</p>
+                </div>
+                <div class="mini-card">
+                  <strong>GEO</strong>
+                  <p>Answer-first layout, extractable headings, proof blocks, references, trust cues, and entity alignment.</p>
+                </div>
+                <div class="mini-card">
+                  <strong>Cache</strong>
+                  <p>Each keyword is cached independently using category + normalized keyword + normalized brand info.</p>
+                </div>
+              </div>
+              <div class="inline-list">
+                <span>SEO title/meta rules</span>
+                <span>GEO answer-first</span>
+                <span>FAQ blocks</span>
+                <span>Azure image generation</span>
+                <span>Async task polling</span>
+                <span>Reusable article cache</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <strong>Image Generation</strong>
+                <span>Article generation can now produce one cover image plus supporting in-content visuals.</span>
+              </div>
+              <span class="pill">Azure OpenAI</span>
+            </div>
+            <div class="card-body">
+              <div class="mini-grid">
+                <div class="mini-card">
+                  <strong>Cover</strong>
+                  <p>A polished editorial hero image is generated from the article title, keyword, and product context.</p>
+                </div>
+                <div class="mini-card">
+                  <strong>Content Images</strong>
+                  <p>2-3 supporting images are generated from strategy image briefs or core H2 sections.</p>
+                </div>
+                <div class="mini-card">
+                  <strong>Output</strong>
+                  <p>Images are saved locally and injected back into the final HTML preview automatically.</p>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="stack">
+          <article class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <strong>How It Works</strong>
+                <span>The page doubles as a product demo and a developer quickstart.</span>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="doc-block">
+                <h3>1. Submit a job</h3>
+                <p>Send category, keywords, and brand context to the task API.</p>
+                <pre class="code-block">curl -X POST http://127.0.0.1:8028/api/tasks \\
   -H "Content-Type: application/json" \\
-  -d '{{"category":"seo","keywords":["portable charger on plane","tsa power bank rules"],"info":"Brand: VoltGo. Product: 20000mAh portable charger.","language":"English"}}'</pre>
+  -d '{{"category":"seo","keywords":["portable charger on plane","tsa power bank rules"],"info":"Brand: VoltGo. Product: 20000mAh portable charger.","language":"English","generate_images":true}}'</pre>
+              </div>
+              <div class="doc-block">
+                <h3>2. Poll the task result</h3>
+                <p>The server processes each keyword independently and marks cache hits when available.</p>
+                <pre class="code-block">curl http://127.0.0.1:8028/api/tasks/&lt;task_id&gt;</pre>
+              </div>
+              <div class="doc-block">
+                <h3>3. Read the article payload</h3>
+                <p>Each item returns title, meta title, meta description, HTML, strategy snapshot, and generated image metadata.</p>
+              </div>
             </div>
-            <div class="doc-block">
-              <h3>2. Poll the task result</h3>
-              <p>The server processes each keyword independently and marks cache hits when available.</p>
-              <pre class="code-block">curl http://127.0.0.1:5000/api/tasks/&lt;task_id&gt;</pre>
-            </div>
-            <div class="doc-block">
-              <h3>3. Read the article payload</h3>
-              <p>Each item returns title, meta title, meta description, HTML, generation mode, and strategy snapshot.</p>
-            </div>
-          </div>
-        </article>
+          </article>
 
-        <article class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <strong>Startup</strong>
-              <span>Structured to feel closer to the `site-geo` app entry style.</span>
+          <article class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <strong>Startup</strong>
+                <span>Structured to feel closer to the `site-geo` app entry style.</span>
+              </div>
             </div>
-          </div>
-          <div class="card-body">
-            <div class="doc-block">
-              <h3>Recommended command</h3>
-              <pre class="code-block">python -m flask --app app.main run --debug --host 0.0.0.0 --port 5000</pre>
+            <div class="card-body">
+              <div class="doc-block">
+                <h3>Recommended command</h3>
+                <pre class="code-block">python -m flask --app app.main run --debug --host 0.0.0.0 --port 8028</pre>
+              </div>
+              <div class="doc-block">
+                <h3>Shell launcher</h3>
+                <pre class="code-block">./start.sh</pre>
+              </div>
+              <div class="doc-block">
+                <h3>Health check</h3>
+                <pre class="code-block">curl http://127.0.0.1:8028/api/health</pre>
+              </div>
             </div>
-            <div class="doc-block">
-              <h3>Shell launcher</h3>
-              <pre class="code-block">./start.sh</pre>
-            </div>
-            <div class="doc-block">
-              <h3>Health check</h3>
-              <pre class="code-block">curl http://127.0.0.1:5000/api/health</pre>
-            </div>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="card-header">
-        <div class="card-title">
-          <strong>Task Result</strong>
-          <span>Status, cache summary, and generated article payloads appear here.</span>
+          </article>
         </div>
-        <span id="task-meta" class="pill">No active task</span>
-      </div>
-      <div class="card-body">
-        <div id="summary" class="summary-grid">
-          <div class="summary-card"><strong>0</strong><span>Total</span></div>
-          <div class="summary-card"><strong>0</strong><span>Completed</span></div>
-          <div class="summary-card"><strong>0</strong><span>Cached</span></div>
-          <div class="summary-card"><strong>0</strong><span>Failed</span></div>
-        </div>
-        <div id="results" class="results">
-          <div class="empty">Submit a task to preview generated SEO or GEO article output.</div>
-        </div>
-      </div>
+      </section>
     </section>
   </main>
 
   <script>
     const form = document.getElementById("task-form");
+    const submitBtn = document.getElementById("submit-btn");
     const taskMeta = document.getElementById("task-meta");
     const summary = document.getElementById("summary");
     const results = document.getElementById("results");
+    const apiJson = document.getElementById("api-json");
     const clearBtn = document.getElementById("clear-results");
     let pollTimer = null;
 
@@ -861,6 +1068,7 @@ def render_demo_page(*, llm_enabled: bool) -> str:
     function renderResults(task) {{
       taskMeta.textContent = `Task ${{task.task_id}} · ${{task.status}}`;
       renderSummary(task.progress);
+      apiJson.textContent = JSON.stringify(task, null, 2);
       const items = task.items || [];
 
       if (!items.length) {{
@@ -872,6 +1080,20 @@ def render_demo_page(*, llm_enabled: bool) -> str:
         const article = item.article || {{}};
         const statusClass = item.status === "failed" ? "pill-failed" : item.status === "completed" ? "pill-done" : "";
         const previewHtml = article.html ? article.html : "<p>Waiting for article output...</p>";
+        const images = Array.isArray(article.images) ? article.images : [];
+        const galleryHtml = images.length ? `
+          <div class="gallery">
+            ${images.map((image) => `
+              <article class="gallery-card">
+                <img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.alt)}" />
+                <div class="gallery-card-body">
+                  <strong>${escapeHtml(image.role)}</strong>
+                  <p>${escapeHtml(image.alt)}</p>
+                </div>
+              </article>
+            `).join("")}
+          </div>
+        ` : "";
         return `
           <article class="result-card">
             <div class="result-head">
@@ -881,6 +1103,7 @@ def render_demo_page(*, llm_enabled: bool) -> str:
                   <span class="pill ${{statusClass}}">${{escapeHtml(item.status)}}</span>
                   ${{item.cache_hit ? '<span class="pill pill-cache">cache hit</span>' : ''}}
                   ${{article.generation_mode ? `<span class="pill">${{escapeHtml(article.generation_mode)}}</span>` : ''}}
+                  ${{article.image_generation_mode ? `<span class="pill">${{escapeHtml(article.image_generation_mode)} images</span>` : ''}}
                 </div>
               </div>
             </div>
@@ -903,6 +1126,7 @@ def render_demo_page(*, llm_enabled: bool) -> str:
                   <pre class="code-block">${{escapeHtml(article.html)}}</pre>
                 </div>
               </div>
+              ${{galleryHtml}}
             ` : '<div class="muted">Waiting for article output...</div>'}
           </article>
         `;
@@ -928,6 +1152,8 @@ def render_demo_page(*, llm_enabled: bool) -> str:
       const payload = await response.json();
       if (!payload.success) {{
         taskMeta.textContent = payload.message || "Task lookup failed";
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Start Task';
         return;
       }}
 
@@ -936,14 +1162,28 @@ def render_demo_page(*, llm_enabled: bool) -> str:
 
       if (!["completed", "failed", "partial_failed"].includes(task.status)) {{
         pollTimer = setTimeout(() => fetchTask(taskId), 1500);
+      }} else {{
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Start Task';
       }}
     }}
 
     form.addEventListener("submit", async (event) => {{
       event.preventDefault();
       clearTimeout(pollTimer);
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner" style="width:18px;height:18px;border-width:3px;margin:0"></span> Starting...';
       taskMeta.textContent = "Submitting task...";
-      results.innerHTML = '<div class="empty">Task created. Waiting for result...</div>';
+      results.innerHTML = `
+        <div class="loading-card">
+          <div>
+            <div class="spinner"></div>
+            <strong>Creating task and generating content...</strong>
+            <div>The app is analyzing keywords, drafting the article, and preparing images.</div>
+          </div>
+        </div>
+      `;
+      apiJson.textContent = JSON.stringify({ status: "submitting" }, null, 2);
       renderSummary();
 
       const formData = new FormData(form);
@@ -952,7 +1192,8 @@ def render_demo_page(*, llm_enabled: bool) -> str:
         language: formData.get("language"),
         keywords: formData.get("keywords"),
         info: formData.get("info"),
-        force_refresh: formData.get("force_refresh") === "true"
+        force_refresh: formData.get("force_refresh") === "true",
+        generate_images: formData.get("generate_images") === "true"
       }};
 
       const response = await fetch("/api/tasks", {{
@@ -965,18 +1206,35 @@ def render_demo_page(*, llm_enabled: bool) -> str:
       if (!data.success) {{
         taskMeta.textContent = data.message || "Task creation failed";
         results.innerHTML = '<div class="empty">The request could not be processed.</div>';
+        apiJson.textContent = JSON.stringify(data, null, 2);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Start Task';
         return;
       }}
 
       taskMeta.textContent = `Task ${{data.data.task_id}} created`;
+      apiJson.textContent = JSON.stringify(data, null, 2);
       fetchTask(data.data.task_id);
     }});
 
     clearBtn.addEventListener("click", () => {{
       clearTimeout(pollTimer);
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = 'Start Task';
       taskMeta.textContent = "No active task";
       renderSummary();
       results.innerHTML = '<div class="empty">Submit a task to preview generated SEO or GEO article output.</div>';
+      apiJson.textContent = '{}';
+    }});
+
+    document.querySelectorAll(".shell-tab-button").forEach((button) => {{
+      button.addEventListener("click", () => {{
+        const tab = button.dataset.shellTab;
+        document.querySelectorAll(".shell-tab-button").forEach((item) => item.classList.toggle("active", item === button));
+        document.querySelectorAll(".shell-tab-panel").forEach((panel) => {{
+          panel.classList.toggle("active", panel.dataset.shellPanel === tab);
+        }});
+      }});
     }});
   </script>
 </body>
@@ -986,6 +1244,9 @@ def render_demo_page(*, llm_enabled: bool) -> str:
         html.replace("__LLM_BADGE_CLASS__", llm_badge_class)
         .replace("__LLM_LABEL__", llm_label)
         .replace("__LLM_TIP__", llm_tip)
+        .replace("__IMAGE_BADGE_CLASS__", image_badge_class)
+        .replace("__IMAGE_LABEL__", image_label)
+        .replace("__IMAGE_TIP__", image_tip)
         .replace("{{", "{")
         .replace("}}", "}")
     )

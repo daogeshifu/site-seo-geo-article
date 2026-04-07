@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .image_service import ImageService
 from .llm_client import LLMClient
 from .prompt_builder import (
     build_draft_prompt,
@@ -12,16 +13,19 @@ from .utils import extract_json_object, slugify, truncate
 
 
 class WriterService:
-    def __init__(self, llm_client: LLMClient) -> None:
+    def __init__(self, llm_client: LLMClient, image_service: ImageService | None = None) -> None:
         self.llm_client = llm_client
+        self.image_service = image_service
 
     def generate(
         self,
         *,
+        asset_namespace: str,
         category: str,
         keyword: str,
         info: str,
         language: str = "English",
+        generate_images: bool = True,
     ) -> dict[str, Any]:
         if self.llm_client.enabled:
             strategy_prompt = build_strategy_prompt(category, keyword, info, language)
@@ -34,7 +38,7 @@ class WriterService:
             polish_prompt = build_polish_prompt(category, language, keyword, draft_html)
             polished_html = self.llm_client.complete(polish_prompt)
 
-            return self._package_article(
+            article = self._package_article(
                 category=category,
                 keyword=keyword,
                 info=info,
@@ -43,12 +47,47 @@ class WriterService:
                 html=polished_html.strip(),
                 generation_mode="llm",
             )
+            return self._attach_images(
+                asset_namespace=asset_namespace,
+                article=article,
+                category=category,
+                keyword=keyword,
+                info=info,
+                generate_images=generate_images,
+            )
 
-        return self._mock_article(
+        article = self._mock_article(
             category=category,
             keyword=keyword,
             info=info,
             language=language,
+        )
+        return self._attach_images(
+            asset_namespace=asset_namespace,
+            article=article,
+            category=category,
+            keyword=keyword,
+            info=info,
+            generate_images=generate_images,
+        )
+
+    def ensure_images(
+        self,
+        *,
+        asset_namespace: str,
+        article: dict[str, Any],
+        category: str,
+        keyword: str,
+        info: str,
+        generate_images: bool = True,
+    ) -> dict[str, Any]:
+        return self._attach_images(
+            asset_namespace=asset_namespace,
+            article=article,
+            category=category,
+            keyword=keyword,
+            info=info,
+            generate_images=generate_images,
         )
 
     def _package_article(
@@ -82,6 +121,10 @@ class WriterService:
             "html": html,
             "strategy": strategy,
             "generation_mode": generation_mode,
+            "images": [],
+            "cover_image": None,
+            "content_images": [],
+            "image_generation_mode": "disabled",
         }
 
     def _mock_article(
@@ -235,3 +278,45 @@ class WriterService:
             generation_mode="mock",
         )
 
+    def _attach_images(
+        self,
+        *,
+        asset_namespace: str,
+        article: dict[str, Any],
+        category: str,
+        keyword: str,
+        info: str,
+        generate_images: bool,
+    ) -> dict[str, Any]:
+        article_copy = dict(article)
+        if not generate_images or not self.image_service:
+            article_copy.setdefault("images", [])
+            article_copy.setdefault("cover_image", None)
+            article_copy.setdefault("content_images", [])
+            article_copy.setdefault("image_generation_mode", "disabled")
+            return article_copy
+
+        if article_copy.get("images"):
+            article_copy["cover_image"] = next(
+                (item for item in article_copy["images"] if item.get("role") == "cover"),
+                article_copy.get("cover_image"),
+            )
+            article_copy["content_images"] = [
+                item for item in article_copy["images"] if item.get("role") == "content"
+            ]
+            article_copy["image_generation_mode"] = article_copy.get("image_generation_mode") or self.image_service.mode
+            return article_copy
+
+        assets = self.image_service.generate_for_article(
+            asset_namespace=asset_namespace,
+            category=category,
+            keyword=keyword,
+            info=info,
+            article=article_copy,
+        )
+        article_copy["images"] = assets
+        article_copy["cover_image"] = next((item for item in assets if item.get("role") == "cover"), None)
+        article_copy["content_images"] = [item for item in assets if item.get("role") == "content"]
+        article_copy["image_generation_mode"] = self.image_service.mode
+        article_copy["html"] = self.image_service.inject_images_into_html(article_copy["html"], assets)
+        return article_copy

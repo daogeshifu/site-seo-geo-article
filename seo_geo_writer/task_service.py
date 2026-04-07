@@ -57,6 +57,7 @@ class TaskService:
         info: str,
         language: str = "English",
         force_refresh: bool = False,
+        generate_images: bool = True,
     ) -> dict[str, Any]:
         keyword_list = split_keywords(keywords)
         if not keyword_list:
@@ -71,12 +72,14 @@ class TaskService:
             "info": info,
             "language": language,
             "force_refresh": force_refresh,
+            "generate_images": generate_images,
             "status": "queued",
             "created_at": now,
             "updated_at": now,
             "items": [
                 {
                     "keyword": keyword,
+                    "cache_key": self.cache_service.build_key(category, keyword, info),
                     "status": "pending",
                     "cache_hit": False,
                     "article": None,
@@ -123,15 +126,27 @@ class TaskService:
 
         for item in task["items"]:
             keyword = item["keyword"]
+            cache_key = item["cache_key"]
             try:
                 cached = None
                 if not task["force_refresh"]:
                     cached = self.cache_service.get(task["category"], keyword, task["info"])
 
                 if cached:
+                    article = cached["article"]
+                    if task.get("generate_images", True) and not article.get("images"):
+                        article = self.writer_service.ensure_images(
+                            asset_namespace=cache_key,
+                            article=article,
+                            category=task["category"],
+                            keyword=keyword,
+                            info=task["info"],
+                            generate_images=True,
+                        )
+                        self.cache_service.set(task["category"], keyword, task["info"], article)
                     item["status"] = "completed"
                     item["cache_hit"] = True
-                    item["article"] = cached["article"]
+                    item["article"] = article
                     item["error"] = None
                 else:
                     item["status"] = "running"
@@ -139,10 +154,12 @@ class TaskService:
                         self._save_task(task)
 
                     article = self.writer_service.generate(
+                        asset_namespace=cache_key,
                         category=task["category"],
                         keyword=keyword,
                         info=task["info"],
                         language=task["language"],
+                        generate_images=task.get("generate_images", True),
                     )
                     self.cache_service.set(task["category"], keyword, task["info"], article)
                     item["status"] = "completed"
@@ -166,4 +183,3 @@ class TaskService:
 
         with self._lock:
             self._save_task(task)
-

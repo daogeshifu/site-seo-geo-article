@@ -3,11 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 
 from demo import render_demo_page
 from .cache_service import CacheService
 from .config import Settings
+from .image_service import ImageService
 from .llm_client import LLMClient
 from .task_service import TaskService
 from .utils import split_keywords
@@ -28,9 +29,11 @@ def create_app(config_override: dict[str, Any] | None = None) -> Flask:
             setattr(settings, key, value)
         settings.cache_dir = settings.data_dir / "cache"
         settings.tasks_dir = settings.data_dir / "tasks"
+        settings.image_dir = settings.data_dir / "images"
 
     cache_service = CacheService(settings.cache_dir)
-    writer_service = WriterService(LLMClient(settings))
+    image_service = ImageService(settings)
+    writer_service = WriterService(LLMClient(settings), image_service=image_service)
     task_service = TaskService(
         writer_service=writer_service,
         cache_service=cache_service,
@@ -48,7 +51,11 @@ def create_app(config_override: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/")
     def index() -> str:
-        return render_demo_page(llm_enabled=writer_service.llm_client.enabled)
+        return render_demo_page(
+            llm_enabled=writer_service.llm_client.enabled,
+            image_enabled=image_service.enabled,
+            image_mode=image_service.mode,
+        )
 
     @app.get("/api/health")
     def health():
@@ -59,9 +66,16 @@ def create_app(config_override: dict[str, Any] | None = None) -> Flask:
                     "status": "ok",
                     "llm_enabled": writer_service.llm_client.enabled,
                     "mock_mode": not writer_service.llm_client.enabled,
+                    "image_generation_enabled": image_service.enabled,
+                    "image_generation_mode": image_service.mode,
                 },
             }
         )
+
+    @app.get("/generated/<asset_namespace>/<path:filename>")
+    def serve_generated_asset(asset_namespace: str, filename: str):
+        directory = settings.image_dir / asset_namespace
+        return send_from_directory(directory, filename)
 
     @app.post("/api/tasks")
     def create_task():
@@ -70,6 +84,7 @@ def create_app(config_override: dict[str, Any] | None = None) -> Flask:
         info = str(payload.get("info", payload.get("brand_info", ""))).strip()
         language = str(payload.get("language", "English")).strip() or "English"
         force_refresh = str(payload.get("force_refresh", "false")).lower() in {"1", "true", "yes"}
+        generate_images = str(payload.get("generate_images", "true")).lower() in {"1", "true", "yes"}
 
         if category not in {"seo", "geo"}:
             return jsonify({"success": False, "message": "category must be seo or geo"}), 400
@@ -84,6 +99,7 @@ def create_app(config_override: dict[str, Any] | None = None) -> Flask:
             info=info,
             language=language,
             force_refresh=force_refresh,
+            generate_images=generate_images,
         )
         return jsonify(
             {

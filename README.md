@@ -29,6 +29,7 @@
 - 输入 `一个或多个关键词`
 - 输入 `品牌 / 产品 / 业务信息`
 - 生成针对不同内容目标的文章草稿
+- 生成 1 张封面图和 2-3 张正文配图
 - 对 `category + keyword + info` 做缓存复用
 - 通过 API 提交任务并异步获取结果
 
@@ -37,7 +38,7 @@
 ## Preview
 
 - Live Preview: [https://www.idtcpack.com/](https://www.idtcpack.com/)
-- Local Demo: `http://127.0.0.1:5000`
+- Local Demo: `http://127.0.0.1:8028`
 
 ---
 
@@ -47,6 +48,9 @@
 - 支持多个关键词批量提交
 - 支持异步任务创建与轮询查询
 - 支持单关键词缓存，避免重复生成
+- 支持 Azure OpenAI 文生图
+- 自动为每篇文章生成 `1` 张封面和 `2-3` 张正文配图
+- 自动把图片注入最终 HTML 预览
 - 内置 Web Demo 页面，方便直接演示
 - 默认支持 `mock mode`，不开 API Key 也能跑通流程
 - 可切换到 OpenAI-compatible 接口，方便接 OpenAI / OpenRouter / 自建兼容网关
@@ -107,6 +111,7 @@ GEO 模式参考了 [site-geo](https://github.com/daogeshifu/site-geo) 的 AI-re
 │   ├── web.py                  # Web 页面 + API 路由
 │   ├── task_service.py         # 异步任务管理
 │   ├── cache_service.py        # category + keyword + info 缓存
+│   ├── image_service.py        # Azure / mock 图片生成
 │   ├── writer_service.py       # SEO / GEO 写作总流程
 │   ├── prompt_builder.py       # 两套 prompt 逻辑
 │   ├── llm_client.py           # OpenAI-compatible client
@@ -193,6 +198,15 @@ http://127.0.0.1:8028
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | API base URL |
 | `OPENAI_MODEL` | `gpt-4.1-mini` | Model name |
 | `OPENAI_REQUEST_TIMEOUT` | `90` | Request timeout |
+| `AZURE_IMAGE_API_URL` | empty | Full Azure image generation URL |
+| `AZURE_IMAGE_API_KEY` | empty | Azure image generation key |
+| `AZURE_IMAGE_ENDPOINT` | empty | Optional Azure endpoint base URL |
+| `AZURE_IMAGE_DEPLOYMENT` | `gpt-image-1.5` | Azure deployment name |
+| `AZURE_IMAGE_API_VERSION` | `2025-04-01-preview` | Azure image API version |
+| `AZURE_IMAGE_SIZE` | `1536x1024` | Generated image size |
+| `AZURE_IMAGE_QUALITY` | `medium` | Image quality |
+| `AZURE_IMAGE_OUTPUT_FORMAT` | `png` | Output format |
+| `ARTICLE_CONTENT_IMAGE_COUNT` | `3` | Body image count per article |
 | `IS_PROD` | `N` | Start in background when set to `Y` |
 | `AUTO_KILL_PORT` | `N` | Kill the requested port instead of auto-switching |
 
@@ -212,13 +226,14 @@ If you keep `LLM_MOCK_MODE=true`, the whole workflow still works for demo and de
 ### Create Task
 
 ```bash
-curl -X POST http://127.0.0.1:5000/api/tasks \
+curl -X POST http://127.0.0.1:8028/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "category": "seo",
     "keywords": ["portable charger on plane", "tsa power bank rules"],
     "info": "Brand: VoltGo. Product: 20000mAh portable charger for travel.",
-    "language": "English"
+    "language": "English",
+    "generate_images": true
   }'
 ```
 
@@ -237,7 +252,7 @@ Response:
 ### Get Task
 
 ```bash
-curl http://127.0.0.1:5000/api/tasks/4ce7c5807d8b4c4d91538e1b10fd9556
+curl http://127.0.0.1:8028/api/tasks/4ce7c5807d8b4c4d91538e1b10fd9556
 ```
 
 Response:
@@ -264,7 +279,14 @@ Response:
           "meta_title": "...",
           "meta_description": "...",
           "html": "...",
-          "generation_mode": "llm"
+          "generation_mode": "llm",
+          "image_generation_mode": "azure",
+          "images": [
+            {
+              "role": "cover",
+              "url": "/generated/<asset_namespace>/01-cover-portable-charger.png"
+            }
+          ]
         }
       }
     ]
@@ -303,10 +325,12 @@ cache_key = sha256(category + normalized_keyword + normalized_info)
 - 选择 `SEO / GEO`
 - 输入多关键词
 - 输入品牌 / 产品信息
+- 开关控制是否生成图片
 - 提交任务
 - 轮询任务状态
 - 查看缓存命中情况
 - 预览最终 HTML
+- 预览封面图与正文配图
 - 直接查看 API 调用示例和启动命令
 
 ---
