@@ -6,4 +6,3 @@ data/
 .env
 nohup.out
 server.pid
-
