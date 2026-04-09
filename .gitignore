@@ -5,4 +5,5 @@ __pycache__/
 data/
 .env
 nohup.out
+server.pid
 
