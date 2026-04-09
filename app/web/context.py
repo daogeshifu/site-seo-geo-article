@@ -16,7 +16,7 @@ def build_demo_page_context(
     image_label = "Azure Images" if image_enabled else "Mock Images"
     image_badge_class = "badge-live" if image_enabled else "badge-mock"
     image_tip = (
-        "Azure OpenAI image generation is active. Each article can create one cover plus 2-3 supporting images."
+        "Azure OpenAI image generation is active. Each task can request an optional cover plus 0-3 supporting images."
         if image_enabled
         else "Azure image credentials are not configured, so the app will generate local SVG mock images for demo use."
     )

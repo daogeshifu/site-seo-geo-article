@@ -7,6 +7,7 @@ from typing import Any
 from fastapi.templating import Jinja2Templates
 
 from app.core.config import Settings
+from app.services.auth_service import AuthService
 from app.services.cache_service import CacheService
 from app.services.image_service import ImageService
 from app.services.llm_client import LLMClient
@@ -17,6 +18,7 @@ from app.services.writer_service import WriterService
 @dataclass
 class AppServices:
     settings: Settings
+    auth_service: AuthService
     cache_service: CacheService
     image_service: ImageService
     writer_service: WriterService
@@ -35,6 +37,7 @@ def build_services(config_override: dict[str, Any] | None = None) -> AppServices
         settings.image_dir = settings.data_dir / "images"
 
     cache_service = CacheService(settings.cache_dir)
+    auth_service = AuthService(settings)
     image_service = ImageService(settings)
     writer_service = WriterService(LLMClient(settings), image_service=image_service)
     task_service = TaskService(
@@ -46,6 +49,7 @@ def build_services(config_override: dict[str, Any] | None = None) -> AppServices
 
     return AppServices(
         settings=settings,
+        auth_service=auth_service,
         cache_service=cache_service,
         image_service=image_service,
         writer_service=writer_service,

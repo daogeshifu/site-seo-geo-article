@@ -1,71 +1,63 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Header, status
 from fastapi.responses import JSONResponse
 
 from app.core.runtime import AppServices
 from app.utils.common import split_keywords
 from .schemas import (
     ErrorResponse,
-    HealthData,
-    HealthResponse,
     TaskAcceptedData,
     TaskCreateRequest,
     TaskCreateResponse,
     TaskDetailResponse,
-    TokenTiers,
+    TokenExchangeData,
+    TokenExchangeRequest,
+    TokenExchangeResponse,
 )
 
 
-def resolve_access_tier(services: AppServices, token: str) -> str | None:
-    token = token.strip()
-    if not token:
+def resolve_auth_payload(services: AppServices, authorization: str | None) -> dict[str, str] | None:
+    if not authorization:
         return None
-    if services.settings.vip_access_token and token == services.settings.vip_access_token:
-        return "vip"
-    if services.settings.normal_access_token and token == services.settings.normal_access_token:
-        return "standard"
-    return None
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        return None
+    return services.auth_service.verify_token(token)
 
 
 def create_api_router(services: AppServices) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["api"])
 
-    @router.get(
-        "/health",
-        response_model=HealthResponse,
-        responses={200: {"model": HealthResponse}},
-        summary="Check service status",
+    @router.post(
+        "/token",
+        include_in_schema=False,
+        response_model=TokenExchangeResponse,
+        responses={403: {"model": ErrorResponse}},
     )
-    async def health() -> HealthResponse:
-        return HealthResponse(
-            data=HealthData(
-                status="ok",
-                llm_enabled=services.writer_service.llm_client.enabled,
-                mock_mode=not services.writer_service.llm_client.enabled,
-                image_generation_enabled=services.image_service.enabled,
-                image_generation_mode=services.image_service.mode,
-                token_protection_enabled=bool(
-                    services.settings.normal_access_token or services.settings.vip_access_token
-                ),
-                token_tiers=TokenTiers(
-                    standard=bool(services.settings.normal_access_token),
-                    vip=bool(services.settings.vip_access_token),
-                ),
+    async def exchange_token(payload: TokenExchangeRequest) -> TokenExchangeResponse | JSONResponse:
+        issued = services.auth_service.issue_token(payload.access_key)
+        if not issued:
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"success": False, "message": "valid access key is required"},
             )
-        )
+        return TokenExchangeResponse(data=TokenExchangeData(**issued))
 
     @router.post(
         "/tasks",
         response_model=TaskCreateResponse,
-        responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}},
+        responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
         summary="Create an async article generation task",
     )
-    async def create_task(payload: TaskCreateRequest) -> TaskCreateResponse | JSONResponse:
+    async def create_task(
+        payload: TaskCreateRequest,
+        authorization: str | None = Header(default=None),
+    ) -> TaskCreateResponse | JSONResponse:
         category = payload.category.strip().lower()
         info = (payload.info or payload.brand_info or "").strip()
         language = (payload.language or "English").strip() or "English"
-        access_tier = resolve_access_tier(services, payload.token)
+        auth_payload = resolve_auth_payload(services, authorization)
 
         if category not in {"seo", "geo"}:
             return JSONResponse(
@@ -73,10 +65,10 @@ def create_api_router(services: AppServices) -> APIRouter:
                 content={"success": False, "message": "category must be seo or geo"},
             )
 
-        if not access_tier:
+        if not auth_payload:
             return JSONResponse(
-                status_code=status.HTTP_403_FORBIDDEN,
-                content={"success": False, "message": "valid access token is required"},
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"success": False, "message": "valid bearer token is required"},
             )
 
         keywords = split_keywords(payload.keywords)
@@ -92,24 +84,35 @@ def create_api_router(services: AppServices) -> APIRouter:
             info=info,
             language=language,
             force_refresh=payload.force_refresh,
-            generate_images=payload.generate_images,
-            access_tier=access_tier,
+            include_cover=payload.include_cover,
+            content_image_count=payload.content_image_count,
+            access_tier=auth_payload["tier"],
         )
         return TaskCreateResponse(
             data=TaskAcceptedData(
                 task_id=task["task_id"],
                 status=task["status"],
-                access_tier=access_tier,
+                access_tier=auth_payload["tier"],
             )
         )
 
     @router.get(
         "/tasks/{task_id}",
         response_model=TaskDetailResponse,
-        responses={404: {"model": ErrorResponse}},
+        responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
         summary="Fetch an async task result",
     )
-    async def get_task(task_id: str) -> TaskDetailResponse | JSONResponse:
+    async def get_task(
+        task_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> TaskDetailResponse | JSONResponse:
+        auth_payload = resolve_auth_payload(services, authorization)
+        if not auth_payload:
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"success": False, "message": "valid bearer token is required"},
+            )
+
         task = services.task_service.get_task(task_id)
         if not task:
             return JSONResponse(

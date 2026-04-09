@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from app.services.image_service import ImageService
@@ -25,7 +26,8 @@ class WriterService:
         keyword: str,
         info: str,
         language: str = "English",
-        generate_images: bool = True,
+        include_cover: int = 1,
+        content_image_count: int = 3,
     ) -> dict[str, Any]:
         if self.llm_client.enabled:
             strategy_prompt = build_strategy_prompt(category, keyword, info, language)
@@ -53,7 +55,8 @@ class WriterService:
                 category=category,
                 keyword=keyword,
                 info=info,
-                generate_images=generate_images,
+                include_cover=include_cover,
+                content_image_count=content_image_count,
             )
 
         article = self._mock_article(
@@ -68,7 +71,8 @@ class WriterService:
             category=category,
             keyword=keyword,
             info=info,
-            generate_images=generate_images,
+            include_cover=include_cover,
+            content_image_count=content_image_count,
         )
 
     def ensure_images(
@@ -79,7 +83,8 @@ class WriterService:
         category: str,
         keyword: str,
         info: str,
-        generate_images: bool = True,
+        include_cover: int = 1,
+        content_image_count: int = 3,
     ) -> dict[str, Any]:
         return self._attach_images(
             asset_namespace=asset_namespace,
@@ -87,8 +92,50 @@ class WriterService:
             category=category,
             keyword=keyword,
             info=info,
-            generate_images=generate_images,
+            include_cover=include_cover,
+            content_image_count=content_image_count,
         )
+
+    def present_article(
+        self,
+        *,
+        asset_namespace: str,
+        article: dict[str, Any],
+        include_cover: int,
+        content_image_count: int,
+    ) -> dict[str, Any]:
+        response_article = deepcopy(article)
+        stored_assets = response_article.get("images") or []
+        response_assets = (
+            self.image_service.build_response_assets(
+                stored_assets,
+                asset_namespace=asset_namespace,
+                include_cover=include_cover,
+                content_image_count=content_image_count,
+            )
+            if self.image_service
+            else []
+        )
+        raw_html = response_article.get("raw_html") or (
+            self.image_service.strip_generated_images(response_article.get("html", ""))
+            if self.image_service
+            else response_article.get("html", "")
+        )
+        response_article["raw_html"] = raw_html
+        response_article["images"] = response_assets
+        response_article["cover_image"] = next((item for item in response_assets if item["role"] == "cover"), None)
+        response_article["content_images"] = [item for item in response_assets if item["role"] == "content"]
+        response_article["html"] = (
+            self.image_service.inject_images_into_html(raw_html, response_assets)
+            if self.image_service
+            else raw_html
+        )
+        response_article["image_generation_mode"] = (
+            response_article.get("image_generation_mode")
+            if response_assets
+            else "disabled"
+        )
+        return response_article
 
     def _package_article(
         self,
@@ -118,6 +165,7 @@ class WriterService:
                 160,
             ),
             "slug": slugify(title),
+            "raw_html": html,
             "html": html,
             "strategy": strategy,
             "generation_mode": generation_mode,
@@ -291,31 +339,30 @@ class WriterService:
         category: str,
         keyword: str,
         info: str,
-        generate_images: bool,
+        include_cover: int,
+        content_image_count: int,
     ) -> dict[str, Any]:
-        if not generate_images or not self.image_service:
+        if not self.image_service:
             article["images"] = article.get("images") or []
-            article["cover_image"] = article.get("cover_image")
-            article["content_images"] = article.get("content_images") or []
             article["image_generation_mode"] = "disabled"
             return article
 
-        if article.get("images"):
-            article["cover_image"] = next((item for item in article["images"] if item["role"] == "cover"), None)
-            article["content_images"] = [item for item in article["images"] if item["role"] == "content"]
-            article["image_generation_mode"] = article.get("image_generation_mode") or self.image_service.mode
+        article["raw_html"] = article.get("raw_html") or article.get("html", "")
+
+        if int(include_cover) == 0 and int(content_image_count) == 0:
+            article["images"] = article.get("images") or []
+            article["image_generation_mode"] = "disabled"
             return article
 
-        assets = self.image_service.generate_for_article(
+        assets = self.image_service.ensure_assets(
             asset_namespace=asset_namespace,
             category=category,
             keyword=keyword,
             info=info,
             article=article,
+            include_cover=include_cover,
+            content_image_count=content_image_count,
         )
         article["images"] = assets
-        article["cover_image"] = next((item for item in assets if item["role"] == "cover"), None)
-        article["content_images"] = [item for item in assets if item["role"] == "content"]
         article["image_generation_mode"] = self.image_service.mode
-        article["html"] = self.image_service.inject_images_into_html(article["html"], assets)
         return article

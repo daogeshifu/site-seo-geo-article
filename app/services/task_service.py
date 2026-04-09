@@ -57,7 +57,8 @@ class TaskService:
         info: str,
         language: str = "English",
         force_refresh: bool = False,
-        generate_images: bool = True,
+        include_cover: int = 1,
+        content_image_count: int = 3,
         access_tier: str = "standard",
     ) -> dict[str, Any]:
         keyword_list = split_keywords(keywords)
@@ -73,7 +74,8 @@ class TaskService:
             "info": info,
             "language": language,
             "force_refresh": force_refresh,
-            "generate_images": generate_images,
+            "include_cover": max(0, min(1, int(include_cover))),
+            "content_image_count": max(0, min(3, int(content_image_count))),
             "access_tier": access_tier,
             "status": "queued",
             "created_at": now,
@@ -105,9 +107,7 @@ class TaskService:
                 return None
             task = load_json(path)
             self._tasks[task_id] = task
-        payload = deepcopy(task)
-        payload["progress"] = self._compute_progress(payload["items"])
-        return payload
+        return self._build_response_payload(task)
 
     def _compute_progress(self, items: list[dict[str, Any]]) -> dict[str, int]:
         completed = sum(1 for item in items if item["status"] == "completed")
@@ -119,6 +119,19 @@ class TaskService:
             "failed": failed,
             "cached": cached,
         }
+
+    def _build_response_payload(self, task: dict[str, Any]) -> dict[str, Any]:
+        payload = deepcopy(task)
+        for item in payload["items"]:
+            if item.get("article"):
+                item["article"] = self.writer_service.present_article(
+                    asset_namespace=item["cache_key"],
+                    article=item["article"],
+                    include_cover=payload.get("include_cover", 1),
+                    content_image_count=payload.get("content_image_count", 3),
+                )
+        payload["progress"] = self._compute_progress(payload["items"])
+        return payload
 
     def _run_task(self, task_id: str) -> None:
         with self._lock:
@@ -136,14 +149,18 @@ class TaskService:
 
                 if cached:
                     article = cached["article"]
-                    if task.get("generate_images", True) and not article.get("images"):
+                    needs_images = (
+                        task.get("include_cover", 1) > 0 or task.get("content_image_count", 3) > 0
+                    )
+                    if needs_images:
                         article = self.writer_service.ensure_images(
                             asset_namespace=cache_key,
                             article=article,
                             category=task["category"],
                             keyword=keyword,
                             info=task["info"],
-                            generate_images=True,
+                            include_cover=task.get("include_cover", 1),
+                            content_image_count=task.get("content_image_count", 3),
                         )
                         self.cache_service.set(task["category"], keyword, task["info"], article)
                     item["status"] = "completed"
@@ -161,7 +178,8 @@ class TaskService:
                         keyword=keyword,
                         info=task["info"],
                         language=task["language"],
-                        generate_images=task.get("generate_images", True),
+                        include_cover=task.get("include_cover", 1),
+                        content_image_count=task.get("content_image_count", 3),
                     )
                     self.cache_service.set(task["category"], keyword, task["info"], article)
                     item["status"] = "completed"

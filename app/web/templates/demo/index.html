@@ -13,11 +13,10 @@
         <div class="logo">SG</div>
         <div class="brand">
           <strong>SEO / GEO Article Writer</strong>
-          <span>FastAPI console for AI-ready content generation</span>
+          <span>FastAPI console for tokenized article generation</span>
         </div>
         <div class="top-links">
           <a class="pill" href="https://www.idtcpack.com/" target="_blank" rel="noreferrer">Live Preview</a>
-          <a class="pill" href="/api/health" target="_blank" rel="noreferrer">Health API</a>
           <a class="pill" href="/docs" target="_blank" rel="noreferrer">OpenAPI Docs</a>
         </div>
       </div>
@@ -27,15 +26,16 @@
       <section class="hero">
         <div class="hero-grid">
           <div>
-            <div class="eyebrow">Open Source • SEO + GEO • Async Tasks</div>
-            <h1>Create one article per keyword, guided by brand context, cache reuse, and optional images.</h1>
+            <div class="eyebrow">Open Source • Bearer Token • Async Tasks</div>
+            <h1>Exchange an access key for a 1-day token, then create SEO or GEO article tasks with optional cover and body images.</h1>
             <p>
-              This demo is designed as a clean product-style console: it lets you submit jobs, call the live API,
-              poll results, preview generated HTML, and inspect the raw payload without leaving the page.
+              The demo stays thin on purpose: it first requests a time-limited token, then uses the same backend task API
+              you would call from your own client or service.
             </p>
             <div class="hero-badges">
               <span class="badge {{ llm_badge_class }}">{{ llm_label }}</span>
               <span class="badge {{ image_badge_class }}">{{ image_label }}</span>
+              <span class="badge badge-neutral">1-day bearer token</span>
               <span class="badge badge-neutral">POST /api/tasks</span>
               <span class="badge badge-neutral">GET /api/tasks/&lt;task_id&gt;</span>
               <span class="badge badge-neutral">Keyword-level cache</span>
@@ -44,7 +44,7 @@
           <aside class="hero-note">
             <h2>Console Notes</h2>
             <ul>
-              <li>SEO mode follows title, meta, outline, FAQ, and readability constraints.</li>
+              <li>SEO mode emphasizes title, meta, outline, FAQ, and readability constraints.</li>
               <li>GEO mode focuses on answer-first structure, citability, trust signals, and entity clarity.</li>
               <li>{{ llm_tip }}</li>
               <li>{{ image_tip }}</li>
@@ -57,20 +57,47 @@
         <article class="card">
           <div class="card-header">
             <div class="card-title">
-              <strong>Create Task</strong>
-              <span>Submit one or more keywords through the live API. The demo is only a client for the same backend service.</span>
+              <strong>1. Exchange Token</strong>
+              <span>Use a normal or VIP access key from `.env` to mint a bearer token that stays valid for one day.</span>
+            </div>
+            <span id="token-pill" class="pill">No token</span>
+          </div>
+          <div class="card-body">
+            <form id="auth-form" class="form-grid">
+              <label class="full">
+                Access Key
+                <input type="text" name="access_key" placeholder="Enter NORMAL_ACCESS_KEY or VIP_ACCESS_KEY" required />
+              </label>
+              <div id="token-note" class="token-note">
+                Token exchange happens once here, then the demo automatically sends `Authorization: Bearer ...` when you create or fetch tasks.
+              </div>
+              <div id="token-display" class="token-display hidden">
+                <div class="token-display-head">
+                  <div>
+                    <strong>Issued Access Token</strong>
+                    <span id="token-meta">Standard access · valid for 1 day</span>
+                  </div>
+                  <span id="token-status-badge" class="pill pill-done">Active</span>
+                </div>
+                <pre id="token-value" class="token-value"></pre>
+              </div>
+              <div class="actions">
+                <button class="btn btn-primary" type="submit" id="token-btn">Get 1-Day Token</button>
+              </div>
+            </form>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <strong>2. Create Task</strong>
+              <span>Submit one or more keywords through the live API after a valid token has been exchanged.</span>
             </div>
             <span class="pill">Demo Client</span>
           </div>
           <div class="card-body">
             <form id="task-form" class="form-grid">
-              <label class="full">
-                Access Token
-                <input type="text" name="token" placeholder="Enter standard or VIP token from .env" required />
-              </label>
-              <div class="token-note">
-                Standard token and VIP token are both configured from `.env`. Only users with a valid token can start tasks.
-              </div>
               <label>
                 Category
                 <select name="category" required>
@@ -82,6 +109,22 @@
                 Language
                 <input type="text" name="language" value="English" />
               </label>
+              <label>
+                Cover Image
+                <select name="include_cover">
+                  <option value="1">1</option>
+                  <option value="0">0</option>
+                </select>
+              </label>
+              <label>
+                Content Images
+                <select name="content_image_count">
+                  <option value="3">3</option>
+                  <option value="2">2</option>
+                  <option value="1">1</option>
+                  <option value="0">0</option>
+                </select>
+              </label>
               <label class="full">
                 Keywords
                 <textarea name="keywords" rows="5" required placeholder="portable charger on plane&#10;tsa power bank rules&#10;best travel charger for flights"></textarea>
@@ -90,17 +133,13 @@
                 Brand / Product Info
                 <textarea name="info" rows="6" placeholder="Brand: VoltGo&#10;Product: 20000mAh portable charger&#10;Highlights: airline-safe, fast charging, digital display"></textarea>
               </label>
-              <div class="image-toolbar">
-                <label class="toggle">
-                  <input type="checkbox" name="generate_images" value="true" checked />
-                  Generate cover + content images
-                </label>
-                <span class="pill">1 cover + 2-3 body images</span>
-              </div>
               <label class="toggle full">
                 <input type="checkbox" name="force_refresh" value="true" />
                 Force refresh and ignore cache for this run
               </label>
+              <div class="token-note">
+                `content_image_count` supports `0-3`. When it is `0`, no body images are generated. `include_cover` is only `0` or `1`.
+              </div>
               <div class="actions">
                 <button class="btn btn-primary" type="submit" id="submit-btn">Start Task</button>
                 <button class="btn btn-ghost" type="button" id="clear-results">Clear Panel</button>
@@ -112,7 +151,7 @@
         <section class="card">
           <div class="card-header">
             <div class="card-title">
-              <strong>Task Result</strong>
+              <strong>3. Task Result</strong>
               <span>Status, article output, and raw API payload appear here.</span>
             </div>
             <span id="task-meta" class="pill">No active task</span>
@@ -131,7 +170,7 @@
               </div>
               <div class="shell-tab-panel active" data-shell-panel="articles">
                 <div id="results" class="results">
-                  <div class="empty">Submit a task to preview generated SEO or GEO article output.</div>
+                  <div class="empty">Exchange a token and submit a task to preview generated SEO or GEO article output.</div>
                 </div>
               </div>
               <div class="shell-tab-panel" data-shell-panel="api">
@@ -160,7 +199,7 @@
                   </div>
                   <div class="mini-card">
                     <strong>GEO</strong>
-                    <p>Answer-first layout, extractable headings, proof blocks, references, trust cues, and entity alignment.</p>
+                    <p>Answer-first layout, proof blocks, references, trust cues, and entity alignment.</p>
                   </div>
                   <div class="mini-card">
                     <strong>Cache</strong>
@@ -168,10 +207,10 @@
                   </div>
                 </div>
                 <div class="inline-list">
-                  <span>SEO title/meta rules</span>
-                  <span>GEO answer-first</span>
-                  <span>FAQ blocks</span>
-                  <span>{{ image_label }}</span>
+                  <span>1-day token exchange</span>
+                  <span>Bearer auth</span>
+                  <span>0-3 content images</span>
+                  <span>Optional cover</span>
                   <span>Async task polling</span>
                   <span>Reusable article cache</span>
                 </div>
@@ -182,7 +221,7 @@
               <div class="card-header">
                 <div class="card-title">
                   <strong>Image Generation</strong>
-                  <span>Article generation can now produce one cover image plus supporting in-content visuals.</span>
+                  <span>Image output is still cached on disk, but task responses return inline preview data so no extra asset route is required.</span>
                 </div>
                 <span class="pill">{{ "Azure OpenAI" if image_mode == "azure" else "Local Mock" }}</span>
               </div>
@@ -190,15 +229,15 @@
                 <div class="mini-grid">
                   <div class="mini-card">
                     <strong>Cover</strong>
-                    <p>A polished editorial hero image is generated from the article title, keyword, and product context.</p>
+                    <p>The cover is optional and controlled by `include_cover = 0 | 1`.</p>
                   </div>
                   <div class="mini-card">
-                    <strong>Content Images</strong>
-                    <p>2-3 supporting images are generated from strategy image briefs or core H2 sections.</p>
+                    <strong>Body Images</strong>
+                    <p>`content_image_count` can be 0, 1, 2, or 3 depending on how visual the article should be.</p>
                   </div>
                   <div class="mini-card">
-                    <strong>Output</strong>
-                    <p>Images are saved locally and injected back into the final HTML preview automatically.</p>
+                    <strong>Preview</strong>
+                    <p>The API response includes inline image sources so the demo can preview the result without `/generated/...` endpoints.</p>
                   </div>
                 </div>
               </div>
@@ -209,26 +248,34 @@
             <article class="card">
               <div class="card-header">
                 <div class="card-title">
-                  <strong>Frontend + Backend</strong>
-                  <span>The directory now separates demo display and API service so contributors can navigate quickly.</span>
+                  <strong>Call Flow</strong>
+                  <span>The UI follows the same order your own client should use.</span>
                 </div>
               </div>
               <div class="card-body">
                 <div class="doc-block">
-                  <h3>1. Demo display</h3>
-                  <p>`app/web/` only handles page routes, page context, templates, and static assets.</p>
+                  <h3>1. Exchange token</h3>
+                  <pre class="code-block">curl -X POST http://127.0.0.1:8028/api/token \
+  -H "Content-Type: application/json" \
+  -d '{"access_key":"YOUR_ACCESS_KEY"}'</pre>
                 </div>
                 <div class="doc-block">
-                  <h3>2. API service</h3>
-                  <p>`app/api/` only handles request schemas, route definitions, validation, and task response contracts.</p>
+                  <h3>2. Create task</h3>
+                  <pre class="code-block">curl -X POST http://127.0.0.1:8028/api/tasks \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "category": "seo",
+    "keywords": ["portable charger on plane"],
+    "info": "Brand: VoltGo. Product: 20000mAh portable charger.",
+    "include_cover": 1,
+    "content_image_count": 2
+  }'</pre>
                 </div>
                 <div class="doc-block">
-                  <h3>3. Shared services</h3>
-                  <p>`app/services/` groups image generation, prompt building, LLM access, caching, writing orchestration, and async tasks.</p>
-                </div>
-                <div class="doc-block">
-                  <h3>4. Demo calls the API</h3>
-                  <p>`app/web/static/demo/demo.js` directly calls `/api/tasks` and `/api/tasks/&lt;task_id&gt;`, so the demo is a thin client over the live backend.</p>
+                  <h3>3. Get task result</h3>
+                  <pre class="code-block">curl http://127.0.0.1:8028/api/tasks/TASK_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"</pre>
                 </div>
               </div>
             </article>
@@ -236,26 +283,22 @@
             <article class="card">
               <div class="card-header">
                 <div class="card-title">
-                  <strong>Startup</strong>
-                  <span>Structured to feel closer to a clean FastAPI app entry style.</span>
+                  <strong>Structure</strong>
+                  <span>The page stays a thin demo client over the live FastAPI service.</span>
                 </div>
               </div>
               <div class="card-body">
                 <div class="doc-block">
-                  <h3>Recommended command</h3>
-                  <pre class="code-block">python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8028</pre>
+                  <h3>Frontend</h3>
+                  <p>`app/web/` renders this page and `app/web/static/demo/demo.js` calls the live token and task endpoints directly.</p>
                 </div>
                 <div class="doc-block">
-                  <h3>Shell launcher</h3>
-                  <pre class="code-block">./start.sh</pre>
+                  <h3>API</h3>
+                  <p>`app/api/` exposes the task creation and task result endpoints. The temporary token exchange route is used by the demo to mint a bearer token first.</p>
                 </div>
                 <div class="doc-block">
-                  <h3>OpenAPI docs</h3>
-                  <pre class="code-block">http://127.0.0.1:8028/docs</pre>
-                </div>
-                <div class="doc-block">
-                  <h3>Health check</h3>
-                  <pre class="code-block">curl http://127.0.0.1:8028/api/health</pre>
+                  <h3>Services</h3>
+                  <p>`app/services/` handles auth signing, prompts, writing, caching, image generation, and async task execution.</p>
                 </div>
               </div>
             </article>

@@ -212,7 +212,11 @@ http://127.0.0.1:8028
 | `AZURE_IMAGE_SIZE` | `1536x1024` | Generated image size |
 | `AZURE_IMAGE_QUALITY` | `medium` | Image quality |
 | `AZURE_IMAGE_OUTPUT_FORMAT` | `png` | Output format |
-| `ARTICLE_CONTENT_IMAGE_COUNT` | `3` | Body image count per article |
+| `DEFAULT_CONTENT_IMAGE_COUNT` | `3` | Demo default for body image count |
+| `NORMAL_ACCESS_KEY` | empty | Standard access key used to exchange a bearer token |
+| `VIP_ACCESS_KEY` | empty | VIP access key used to exchange a bearer token |
+| `TOKEN_SIGNING_SECRET` | empty | Secret used to sign exchanged bearer tokens |
+| `TOKEN_TTL_SECONDS` | `86400` | Bearer token lifetime in seconds |
 | `IS_PROD` | `N` | Start in background when set to `Y` |
 | `AUTO_KILL_PORT` | `N` | Kill the requested port instead of auto-switching |
 
@@ -229,17 +233,27 @@ If you keep `LLM_MOCK_MODE=true`, the whole workflow still works for demo and de
 { "success": false, "message": "..." }
 ```
 
+### Exchange Token
+
+```bash
+curl -X POST http://127.0.0.1:8028/api/token \
+  -H "Content-Type: application/json" \
+  -d '{"access_key":"YOUR_ACCESS_KEY"}'
+```
+
 ### Create Task
 
 ```bash
 curl -X POST http://127.0.0.1:8028/api/tasks \
+  -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "category": "seo",
     "keywords": ["portable charger on plane", "tsa power bank rules"],
     "info": "Brand: VoltGo. Product: 20000mAh portable charger for travel.",
     "language": "English",
-    "generate_images": true
+    "include_cover": 1,
+    "content_image_count": 2
   }'
 ```
 
@@ -258,7 +272,8 @@ Response:
 ### Get Task
 
 ```bash
-curl http://127.0.0.1:8028/api/tasks/4ce7c5807d8b4c4d91538e1b10fd9556
+curl http://127.0.0.1:8028/api/tasks/4ce7c5807d8b4c4d91538e1b10fd9556 \
+  -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 Response:
@@ -290,7 +305,7 @@ Response:
           "images": [
             {
               "role": "cover",
-              "url": "/generated/<asset_namespace>/01-cover-portable-charger.png"
+              "url": "data:image/png;base64,..."
             }
           ]
         }
@@ -298,12 +313,6 @@ Response:
     ]
   }
 }
-```
-
-### Health Check
-
-```bash
-curl http://127.0.0.1:5000/api/health
 ```
 
 ---
@@ -331,7 +340,8 @@ cache_key = sha256(category + normalized_keyword + normalized_info)
 - 选择 `SEO / GEO`
 - 输入多关键词
 - 输入品牌 / 产品信息
-- 开关控制是否生成图片
+- 先用 access key 兑换 1 天 bearer token
+- 控制封面图开关和正文图数量 `0-3`
 - 提交任务
 - 轮询任务状态
 - 查看缓存命中情况

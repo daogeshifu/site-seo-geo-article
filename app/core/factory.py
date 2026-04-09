@@ -18,8 +18,8 @@ def create_app(config_override: dict[str, Any] | None = None) -> FastAPI:
     app = FastAPI(
         title="SEO / GEO Article Writer API",
         description=(
-            "Async article generation demo with SEO/GEO writing modes, keyword-level cache, "
-            "template-based demo page, and optional Azure image generation."
+            "Async article generation service with SEO/GEO writing modes, 1-day bearer auth, "
+            "keyword-level cache, and optional Azure image generation."
         ),
         version="1.0.0",
         docs_url="/docs",

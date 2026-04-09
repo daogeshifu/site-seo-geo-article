@@ -1,18 +1,32 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const form = document.getElementById("task-form");
+  const authForm = document.getElementById("auth-form");
+  const taskForm = document.getElementById("task-form");
+  const tokenBtn = document.getElementById("token-btn");
   const submitBtn = document.getElementById("submit-btn");
+  const tokenPill = document.getElementById("token-pill");
+  const tokenNote = document.getElementById("token-note");
+  const tokenDisplay = document.getElementById("token-display");
+  const tokenValue = document.getElementById("token-value");
+  const tokenMeta = document.getElementById("token-meta");
   const taskMeta = document.getElementById("task-meta");
   const summary = document.getElementById("summary");
   const results = document.getElementById("results");
   const apiJson = document.getElementById("api-json");
   const clearBtn = document.getElementById("clear-results");
   let pollTimer = null;
+  let accessToken = "";
 
   function escapeHtml(value) {
     return String(value || "")
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;");
+  }
+
+  function resetTaskUi(message) {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = "Start Task";
+    taskMeta.textContent = message || "No active task";
   }
 
   function renderSummary(progress) {
@@ -23,6 +37,20 @@ document.addEventListener("DOMContentLoaded", () => {
       <div class="summary-card"><strong>${info.cached || 0}</strong><span>Cached</span></div>
       <div class="summary-card"><strong>${info.failed || 0}</strong><span>Failed</span></div>
     `;
+  }
+
+  function bindShellTabs() {
+    document.querySelectorAll(".shell-tab-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        const tab = button.dataset.shellTab;
+        document
+          .querySelectorAll(".shell-tab-button")
+          .forEach((item) => item.classList.toggle("active", item === button));
+        document.querySelectorAll(".shell-tab-panel").forEach((panel) => {
+          panel.classList.toggle("active", panel.dataset.shellPanel === tab);
+        });
+      });
+    });
   }
 
   function bindResultTabs() {
@@ -39,6 +67,26 @@ document.addEventListener("DOMContentLoaded", () => {
         });
       });
     });
+  }
+
+  function renderTokenState(payload) {
+    accessToken = payload?.data?.access_token || "";
+    const tier = payload?.data?.access_tier || "authorized";
+    const expiresAt = payload?.data?.expires_at || "";
+    tokenPill.textContent = accessToken ? `${tier} token` : "No token";
+    if (accessToken) {
+      tokenNote.textContent = `Bearer token is active until ${expiresAt}. The demo will attach it automatically to task requests.`;
+      tokenMeta.textContent = `${tier.toUpperCase()} access · expires at ${expiresAt}`;
+      tokenValue.textContent = accessToken;
+      tokenDisplay.classList.remove("hidden");
+      return;
+    }
+
+    tokenNote.textContent =
+      "Token exchange happens once here, then the demo automatically sends `Authorization: Bearer ...` when you create or fetch tasks.";
+    tokenMeta.textContent = "Standard access · valid for 1 day";
+    tokenValue.textContent = "";
+    tokenDisplay.classList.add("hidden");
   }
 
   function renderResults(task) {
@@ -70,7 +118,7 @@ document.addEventListener("DOMContentLoaded", () => {
               .map(
                 (image) => `
               <article class="gallery-card">
-                <img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.alt)}" />
+                <img src="${escapeHtml(image.data_url || image.url)}" alt="${escapeHtml(image.alt)}" />
                 <div class="gallery-card-body">
                   <strong>${escapeHtml(image.role)}</strong>
                   <p>${escapeHtml(image.alt)}</p>
@@ -135,13 +183,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function fetchTask(taskId) {
-    const response = await fetch(`/api/tasks/${taskId}`);
+    const response = await fetch(`/api/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
     const payload = await response.json();
 
     if (!payload.success) {
       taskMeta.textContent = payload.message || "Task lookup failed";
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = "Start Task";
+      apiJson.textContent = JSON.stringify(payload, null, 2);
+      resetTaskUi(taskMeta.textContent);
       return;
     }
 
@@ -151,44 +201,103 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!["completed", "failed", "partial_failed"].includes(task.status)) {
       pollTimer = setTimeout(() => fetchTask(taskId), 1500);
     } else {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = "Start Task";
+      resetTaskUi(taskMeta.textContent);
     }
   }
 
-  form.addEventListener("submit", async (event) => {
+  authForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    tokenBtn.disabled = true;
+    tokenBtn.innerHTML =
+      '<span class="spinner" style="width:18px;height:18px;border-width:3px;margin:0"></span> Exchanging...';
+
+    const formData = new FormData(authForm);
+    const payload = {
+      access_key: formData.get("access_key"),
+    };
+
+    const response = await fetch("/api/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    apiJson.textContent = JSON.stringify(data, null, 2);
+
+    if (!data.success) {
+      accessToken = "";
+      renderTokenState(null);
+      tokenNote.textContent = data.message || "Token exchange failed.";
+      tokenBtn.disabled = false;
+      tokenBtn.innerHTML = "Get 1-Day Token";
+      return;
+    }
+
+    renderTokenState(data);
+    tokenBtn.disabled = false;
+    tokenBtn.innerHTML = "Get 1-Day Token";
+  });
+
+  taskForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     clearTimeout(pollTimer);
+
+    if (!accessToken) {
+      taskMeta.textContent = "Exchange a bearer token first";
+      results.innerHTML = '<div class="empty">A valid token is required before the task can start.</div>';
+      return;
+    }
+
     submitBtn.disabled = true;
     submitBtn.innerHTML =
       '<span class="spinner" style="width:18px;height:18px;border-width:3px;margin:0"></span> Starting...';
     taskMeta.textContent = "Submitting task...";
     results.innerHTML = `
-      <div class="loading-card">
-        <div>
-          <div class="spinner"></div>
-          <strong>Creating task and generating content...</strong>
-          <div>The app is analyzing keywords, drafting the article, and preparing images.</div>
+      <div class="loading-card loading-card-immersive">
+        <div class="generation-shell">
+          <div class="generation-orbit">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="generation-copy">
+            <strong>Generating content now</strong>
+            <div class="generation-subtitle">Analyzing keywords, building strategy, drafting HTML, and preparing requested visuals.</div>
+          </div>
+          <div class="generation-steps">
+            <div class="generation-step"><span class="generation-dot"></span><span>Intent and outline planning</span></div>
+            <div class="generation-step"><span class="generation-dot"></span><span>SEO / GEO article drafting</span></div>
+            <div class="generation-step"><span class="generation-dot"></span><span>HTML polishing and image packaging</span></div>
+          </div>
+          <div class="generation-bars">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
         </div>
       </div>
     `;
     apiJson.textContent = JSON.stringify({ status: "submitting" }, null, 2);
     renderSummary();
 
-    const formData = new FormData(form);
+    const formData = new FormData(taskForm);
     const payload = {
-      token: formData.get("token"),
       category: formData.get("category"),
       language: formData.get("language"),
       keywords: formData.get("keywords"),
       info: formData.get("info"),
       force_refresh: formData.get("force_refresh") === "true",
-      generate_images: formData.get("generate_images") === "true",
+      include_cover: Number(formData.get("include_cover") || 1),
+      content_image_count: Number(formData.get("content_image_count") || 3),
     };
 
     const response = await fetch("/api/tasks", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
       body: JSON.stringify(payload),
     });
     const data = await response.json();
@@ -197,8 +306,7 @@ document.addEventListener("DOMContentLoaded", () => {
       taskMeta.textContent = data.message || "Task creation failed";
       results.innerHTML = '<div class="empty">The request could not be processed.</div>';
       apiJson.textContent = JSON.stringify(data, null, 2);
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = "Start Task";
+      resetTaskUi(taskMeta.textContent);
       return;
     }
 
@@ -209,23 +317,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   clearBtn.addEventListener("click", () => {
     clearTimeout(pollTimer);
-    submitBtn.disabled = false;
-    submitBtn.innerHTML = "Start Task";
-    taskMeta.textContent = "No active task";
+    resetTaskUi("No active task");
     renderSummary();
-    results.innerHTML = '<div class="empty">Submit a task to preview generated SEO or GEO article output.</div>';
+    results.innerHTML = '<div class="empty">Exchange a token and submit a task to preview generated SEO or GEO article output.</div>';
     apiJson.textContent = "{}";
   });
 
-  document.querySelectorAll(".shell-tab-button").forEach((button) => {
-    button.addEventListener("click", () => {
-      const tab = button.dataset.shellTab;
-      document
-        .querySelectorAll(".shell-tab-button")
-        .forEach((item) => item.classList.toggle("active", item === button));
-      document.querySelectorAll(".shell-tab-panel").forEach((panel) => {
-        panel.classList.toggle("active", panel.dataset.shellPanel === tab);
-      });
-    });
-  });
+  renderTokenState(null);
+  bindShellTabs();
 });

@@ -1,13 +1,26 @@
-INFO:     Started server process [83686]
+INFO:     Started server process [64972]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:5000 (Press CTRL+C to quit)
-INFO:     127.0.0.1:54007 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54008 - "GET /static/demo/demo.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54007 - "GET /static/demo/style.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54008 - "GET /favicon.ico HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:54031 - "GET /docs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54031 - "GET /openapi.json HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54034 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54181 - "GET /docs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54181 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     Uvicorn running on http://127.0.0.1:8028 (Press CTRL+C to quit)
+INFO:     127.0.0.1:52643 - "GET /?access_key=cbc1ee7f2077e025171ed1fab9541a68e75f8118a6ef4d8f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52643 - "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52643 - "GET /static/demo/style.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52644 - "GET /static/demo/demo.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52644 - "GET /?access_key=cbc1ee7f2077e025171ed1fab9541a68e75f8118a6ef4d8f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52644 - "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52644 - "GET /?access_key=cbc1ee7f2077e025171ed1fab9541a68e75f8118a6ef4d8f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52644 - "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52644 - "GET /?access_key=cbc1ee7f2077e025171ed1fab9541a68e75f8118a6ef4d8f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52644 - "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52644 - "POST /api/token HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52749 - "POST /api/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52749 - "GET /api/tasks/98e2c347bbbb494c84b4a632fc85dcfb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52749 - "GET /api/tasks/98e2c347bbbb494c84b4a632fc85dcfb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52749 - "GET /api/tasks/98e2c347bbbb494c84b4a632fc85dcfb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52749 - "GET /api/tasks/98e2c347bbbb494c84b4a632fc85dcfb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52749 - "GET /api/tasks/98e2c347bbbb494c84b4a632fc85dcfb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52749 - "GET /api/tasks/98e2c347bbbb494c84b4a632fc85dcfb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52749 - "GET /api/tasks/98e2c347bbbb494c84b4a632fc85dcfb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52749 - "GET /api/tasks/98e2c347bbbb494c84b4a632fc85dcfb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52749 - "GET /api/tasks/98e2c347bbbb494c84b4a632fc85dcfb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52749 - "GET /api/tasks/98e2c347bbbb494c84b4a632fc85dcfb HTTP/1.1" 200 OK

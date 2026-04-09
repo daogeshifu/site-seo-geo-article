@@ -28,13 +28,20 @@ class Settings:
     azure_image_size: str = "1536x1024"
     azure_image_quality: str = "medium"
     azure_image_output_format: str = "png"
-    article_content_image_count: int = 3
-    normal_access_token: str = ""
-    vip_access_token: str = ""
+    default_content_image_count: int = 3
+    normal_access_key: str = ""
+    vip_access_key: str = ""
+    token_signing_secret: str = ""
+    token_ttl_seconds: int = 86400
 
     @classmethod
     def from_env(cls) -> "Settings":
         data_dir = Path(os.getenv("APP_DATA_DIR", "data"))
+        normal_access_key = os.getenv("NORMAL_ACCESS_KEY", "").strip()
+        vip_access_key = os.getenv("VIP_ACCESS_KEY", "").strip()
+        token_signing_secret = os.getenv("TOKEN_SIGNING_SECRET", "").strip() or "||".join(
+            item for item in [vip_access_key, normal_access_key, "site-seo-geo-article"] if item
+        )
         return cls(
             host=os.getenv("FLASK_HOST", "0.0.0.0"),
             port=int(os.getenv("FLASK_PORT", "8028")),
@@ -57,10 +64,12 @@ class Settings:
             azure_image_size=os.getenv("AZURE_IMAGE_SIZE", "1536x1024").strip(),
             azure_image_quality=os.getenv("AZURE_IMAGE_QUALITY", "medium").strip(),
             azure_image_output_format=os.getenv("AZURE_IMAGE_OUTPUT_FORMAT", "png").strip(),
-            article_content_image_count=max(
-                2,
-                min(3, int(os.getenv("ARTICLE_CONTENT_IMAGE_COUNT", "3"))),
+            default_content_image_count=max(
+                0,
+                min(3, int(os.getenv("DEFAULT_CONTENT_IMAGE_COUNT", "3"))),
             ),
-            normal_access_token=os.getenv("NORMAL_ACCESS_TOKEN", "").strip(),
-            vip_access_token=os.getenv("VIP_ACCESS_TOKEN", "").strip(),
+            normal_access_key=normal_access_key,
+            vip_access_key=vip_access_key,
+            token_signing_secret=token_signing_secret,
+            token_ttl_seconds=max(60, int(os.getenv("TOKEN_TTL_SECONDS", "86400"))),
         )

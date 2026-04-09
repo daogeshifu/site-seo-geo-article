@@ -5,28 +5,24 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
-class TokenTiers(BaseModel):
-    standard: bool
-    vip: bool
+class TokenExchangeRequest(BaseModel):
+    access_key: str = Field(..., min_length=1, examples=["demo-vip-access-key"])
 
 
-class HealthData(BaseModel):
-    status: str
-    llm_enabled: bool
-    mock_mode: bool
-    image_generation_enabled: bool
-    image_generation_mode: str
-    token_protection_enabled: bool
-    token_tiers: TokenTiers
+class TokenExchangeData(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    access_tier: str
+    expires_in: int
+    expires_at: str
 
 
-class HealthResponse(BaseModel):
+class TokenExchangeResponse(BaseModel):
     success: bool = True
-    data: HealthData
+    data: TokenExchangeData
 
 
 class TaskCreateRequest(BaseModel):
-    token: str = ""
     category: str = Field(..., examples=["seo"])
     keywords: list[str] | str = Field(
         ...,
@@ -36,18 +32,19 @@ class TaskCreateRequest(BaseModel):
     brand_info: str = ""
     language: str = "English"
     force_refresh: bool = False
-    generate_images: bool = True
+    include_cover: int = Field(default=1, ge=0, le=1)
+    content_image_count: int = Field(default=3, ge=0, le=3)
 
     model_config = {
         "json_schema_extra": {
             "example": {
-                "token": "demo-vip-token",
                 "category": "seo",
                 "keywords": ["portable charger on plane", "tsa power bank rules"],
                 "info": "Brand: VoltGo. Product: 20000mAh portable charger.",
                 "language": "English",
                 "force_refresh": False,
-                "generate_images": True,
+                "include_cover": 1,
+                "content_image_count": 2,
             }
         }
     }
