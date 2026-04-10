@@ -11,6 +11,7 @@ from app.services.auth_service import AuthService
 from app.services.cache_service import CacheService
 from app.services.image_service import ImageService
 from app.services.llm_client import LLMClient
+from app.services.oss_service import AliyunOSSService
 from app.services.task_repository import TaskRepository, build_task_repository
 from app.services.task_service import TaskService
 from app.services.writer_service import WriterService
@@ -39,7 +40,8 @@ def build_services(config_override: dict[str, Any] | None = None) -> AppServices
 
     cache_service = CacheService(settings.cache_dir)
     auth_service = AuthService(settings)
-    image_service = ImageService(settings)
+    oss_service = AliyunOSSService(settings)
+    image_service = ImageService(settings, oss_service=oss_service)
     writer_service = WriterService(LLMClient(settings), image_service=image_service)
     task_repository = build_task_repository(settings)
     task_service = TaskService(

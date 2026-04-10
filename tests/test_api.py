@@ -353,6 +353,27 @@ def test_openapi_only_exposes_task_endpoints(tmp_path: Path) -> None:
     assert set(paths.keys()) == {"/api/token", "/api/tasks", "/api/tasks/{task_id}"}
 
 
+def test_openapi_exposes_bearer_security_scheme(tmp_path: Path) -> None:
+    app = create_app(
+        {
+            "data_dir": tmp_path,
+            "llm_mock_mode": True,
+            "openai_api_key": "",
+            "normal_access_key": "test-standard-key",
+            "vip_access_key": "test-vip-key",
+            "token_signing_secret": "test-signing-secret",
+        }
+    )
+    client = TestClient(app)
+
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    components = response.json()["components"]["securitySchemes"]
+    assert "HTTPBearer" in components
+    assert components["HTTPBearer"]["type"] == "http"
+    assert components["HTTPBearer"]["scheme"] == "bearer"
+
+
 def test_create_task_returns_json_when_service_fails(tmp_path: Path) -> None:
     app = create_app(
         {

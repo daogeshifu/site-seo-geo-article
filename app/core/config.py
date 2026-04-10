@@ -34,6 +34,13 @@ class Settings:
     azure_image_size: str = "1536x1024"
     azure_image_quality: str = "medium"
     azure_image_output_format: str = "png"
+    aliyun_oss_access_key_id: str = ""
+    aliyun_oss_access_key_secret: str = ""
+    aliyun_oss_endpoint: str = ""
+    aliyun_oss_bucket: str = ""
+    aliyun_oss_public_base_url: str = ""
+    aliyun_oss_prefix: str = "articles"
+    aliyun_oss_url_expire_seconds: int = 86400
     default_content_image_count: int = 3
     normal_access_key: str = ""
     vip_access_key: str = ""
@@ -83,6 +90,13 @@ class Settings:
             azure_image_size=os.getenv("AZURE_IMAGE_SIZE", "1536x1024").strip(),
             azure_image_quality=os.getenv("AZURE_IMAGE_QUALITY", "medium").strip(),
             azure_image_output_format=os.getenv("AZURE_IMAGE_OUTPUT_FORMAT", "png").strip(),
+            aliyun_oss_access_key_id=os.getenv("ALIYUN_OSS_ACCESS_KEY_ID", "").strip(),
+            aliyun_oss_access_key_secret=os.getenv("ALIYUN_OSS_ACCESS_KEY_SECRET", "").strip(),
+            aliyun_oss_endpoint=os.getenv("ALIYUN_OSS_ENDPOINT", "").strip().rstrip("/"),
+            aliyun_oss_bucket=os.getenv("ALIYUN_OSS_BUCKET", "").strip(),
+            aliyun_oss_public_base_url=os.getenv("ALIYUN_OSS_PUBLIC_BASE_URL", "").strip().rstrip("/"),
+            aliyun_oss_prefix=os.getenv("ALIYUN_OSS_PREFIX", "articles").strip().strip("/") or "articles",
+            aliyun_oss_url_expire_seconds=max(60, int(os.getenv("ALIYUN_OSS_URL_EXPIRE_SECONDS", "86400"))),
             default_content_image_count=max(
                 0,
                 min(3, int(os.getenv("DEFAULT_CONTENT_IMAGE_COUNT", "3"))),

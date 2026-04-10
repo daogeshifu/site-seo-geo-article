@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Header, status
+from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.runtime import AppServices
 from app.services.task_service import FINAL_STATUSES
@@ -19,15 +20,18 @@ from .schemas import (
 )
 
 logger = logging.getLogger(__name__)
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def resolve_auth_payload(services: AppServices, authorization: str | None) -> dict[str, str] | None:
+def resolve_auth_payload(
+    services: AppServices,
+    authorization: HTTPAuthorizationCredentials | None,
+) -> dict[str, str] | None:
     if not authorization:
         return None
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token.strip():
+    if authorization.scheme.lower() != "bearer" or not authorization.credentials.strip():
         return None
-    return services.auth_service.verify_token(token)
+    return services.auth_service.verify_token(authorization.credentials)
 
 
 def create_api_router(services: AppServices) -> APIRouter:
@@ -58,7 +62,7 @@ def create_api_router(services: AppServices) -> APIRouter:
     )
     async def create_task(
         payload: TaskCreateRequest,
-        authorization: str | None = Header(default=None),
+        authorization: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     ) -> TaskCreateResponse | JSONResponse:
         category = payload.category.strip().lower()
         keyword = payload.keyword.strip()
@@ -119,7 +123,7 @@ def create_api_router(services: AppServices) -> APIRouter:
     )
     async def get_task(
         task_id: int,
-        authorization: str | None = Header(default=None),
+        authorization: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     ) -> TaskDetailResponse | JSONResponse:
         auth_payload = resolve_auth_payload(services, authorization)
         if not auth_payload:

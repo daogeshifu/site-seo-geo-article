@@ -1,0 +1,15 @@
+.git
+.gitignore
+.pytest_cache
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+server.pid
+nohup.out
+data
+tests
+.env
+.env.docker

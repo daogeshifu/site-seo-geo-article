@@ -49,6 +49,7 @@
 - 支持异步任务创建与轮询查询
 - 支持单关键词缓存，避免重复生成
 - 支持 Azure OpenAI 文生图
+- 支持将生成图片自动上传到阿里云 OSS
 - 自动为每篇文章生成 `1` 张封面和 `2-3` 张正文配图
 - 自动把图片注入最终 HTML 预览
 - 内置 Web Demo 页面，方便直接演示
@@ -126,6 +127,9 @@ GEO 模式参考了 [site-geo](https://github.com/daogeshifu/site-geo) 的 AI-re
 │   │   └── static/demo/*
 │   └── main.py                 # FastAPI app 启动入口
 ├── requirements.txt
+├── Dockerfile                  # Docker image build file
+├── docker-compose.yml          # Docker Compose deployment
+├── .env.docker.example         # Docker environment example
 ├── start.sh                    # 启动脚本
 └── tests
     ├── test_api.py
@@ -188,6 +192,34 @@ Open:
 http://127.0.0.1:8028
 ```
 
+### 6. Docker Deploy
+
+```bash
+cp .env.docker.example .env.docker
+docker compose --env-file .env.docker up -d --build
+```
+
+默认会：
+
+- 启动 `app` 和 `mysql` 两个容器
+- 自动把本地 `./data` 挂载到容器内 `/app/data`
+- 自动等待 MySQL 健康后再启动 FastAPI
+- 自动把任务和结果持久化到 Compose 内置 MySQL
+
+Open:
+
+```text
+http://127.0.0.1:8028
+```
+
+常用命令：
+
+```bash
+docker compose --env-file .env.docker logs -f app
+docker compose --env-file .env.docker down
+docker compose --env-file .env.docker down -v
+```
+
 ---
 
 ## Environment Variables
@@ -212,6 +244,13 @@ http://127.0.0.1:8028
 | `AZURE_IMAGE_SIZE` | `1536x1024` | Generated image size |
 | `AZURE_IMAGE_QUALITY` | `medium` | Image quality |
 | `AZURE_IMAGE_OUTPUT_FORMAT` | `png` | Output format |
+| `ALIYUN_OSS_ACCESS_KEY_ID` | empty | Aliyun OSS AccessKey ID |
+| `ALIYUN_OSS_ACCESS_KEY_SECRET` | empty | Aliyun OSS AccessKey Secret |
+| `ALIYUN_OSS_ENDPOINT` | empty | Aliyun OSS endpoint, such as `https://oss-cn-beijing.aliyuncs.com` |
+| `ALIYUN_OSS_BUCKET` | empty | Aliyun OSS bucket name |
+| `ALIYUN_OSS_PUBLIC_BASE_URL` | empty | Optional public/custom domain base URL; if empty, private buckets use signed URLs |
+| `ALIYUN_OSS_PREFIX` | `articles` | Object prefix used for uploaded images |
+| `ALIYUN_OSS_URL_EXPIRE_SECONDS` | `86400` | Expiration seconds for signed OSS URLs |
 | `DEFAULT_CONTENT_IMAGE_COUNT` | `3` | Demo default for body image count |
 | `NORMAL_ACCESS_KEY` | empty | Standard access key used to exchange a bearer token |
 | `VIP_ACCESS_KEY` | empty | VIP access key used to exchange a bearer token |
@@ -234,6 +273,38 @@ http://127.0.0.1:8028
 | `AUTO_KILL_PORT` | `N` | Kill the requested port instead of auto-switching |
 
 If you keep `LLM_MOCK_MODE=true`, the whole workflow still works for demo and development.
+
+## Deployment
+
+### Local Script
+
+适合本机开发、调试和快速预览：
+
+```bash
+./start.sh
+```
+
+### Docker Compose
+
+适合标准化部署、团队协作和服务器环境：
+
+```bash
+cp .env.docker.example .env.docker
+docker compose --env-file .env.docker up -d --build
+```
+
+说明：
+
+- `app` 容器运行 FastAPI + Uvicorn
+- `mysql` 容器提供任务元数据和文章结果存储
+- 本地 `data/` 会映射到容器里的 `/app/data`
+- 如果你已有外部 MySQL，可以在 `.env.docker` 里改 `MYSQL_HOST`，并从 `docker-compose.yml` 中移除 `mysql` 服务
+
+镜像与编排文件：
+
+- [Dockerfile](/Users/berry-zhang/workspace/site-seo-geo-article/Dockerfile)
+- [docker-compose.yml](/Users/berry-zhang/workspace/site-seo-geo-article/docker-compose.yml)
+- [.env.docker.example](/Users/berry-zhang/workspace/site-seo-geo-article/.env.docker.example)
 
 ---
 

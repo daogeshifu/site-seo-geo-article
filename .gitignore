@@ -6,3 +6,4 @@ data/
 .env
 nohup.out
 server.pid
+.env.docker
