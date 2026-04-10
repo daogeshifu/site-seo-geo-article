@@ -20,6 +20,11 @@ class _StubOSSService:
         return f"https://signed.example.com/{object_key}"
 
 
+class _FailingOSSService(_StubOSSService):
+    def upload_file(self, local_path: Path, *, asset_namespace: str, filename: str, mime_type: str) -> dict[str, str] | None:
+        raise RuntimeError("oss upload failed")
+
+
 def test_image_service_uploads_new_assets_to_oss(tmp_path: Path) -> None:
     settings = Settings(data_dir=tmp_path, image_dir=tmp_path / "images")
     oss_service = _StubOSSService()
@@ -76,3 +81,32 @@ def test_image_service_prefers_oss_url_and_lazy_uploads_existing_file(tmp_path: 
     assert response_assets[0]["url"].startswith("https://signed.example.com/articles/demo-namespace/")
     assert response_assets[0]["oss_key"].startswith("articles/demo-namespace/")
     assert len(oss_service.upload_calls) == 1
+
+
+def test_image_service_falls_back_to_data_url_when_oss_upload_fails(tmp_path: Path) -> None:
+    settings = Settings(data_dir=tmp_path, image_dir=tmp_path / "images")
+    image_service = ImageService(settings, oss_service=_FailingOSSService())
+
+    namespace = "demo-namespace"
+    folder = settings.image_dir / namespace
+    folder.mkdir(parents=True, exist_ok=True)
+    local_file = folder / "01-cover-demo.png"
+    local_file.write_bytes(b"fake-image-binary")
+
+    response_assets = image_service.build_response_assets(
+        [
+            {
+                "role": "cover",
+                "alt": "cover",
+                "filename": "01-cover-demo.png",
+                "mime_type": "image/png",
+            }
+        ],
+        asset_namespace=namespace,
+        include_cover=1,
+        content_image_count=0,
+    )
+
+    assert len(response_assets) == 1
+    assert response_assets[0]["url"].startswith("data:image/png;base64,")
+    assert response_assets[0]["data_url"].startswith("data:image/png;base64,")

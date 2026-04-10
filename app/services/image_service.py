@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import re
 from copy import deepcopy
 from pathlib import Path
@@ -11,6 +12,9 @@ import requests
 from app.core.config import Settings
 from app.services.oss_service import AliyunOSSService
 from app.utils.common import ensure_dir, slugify
+
+
+logger = logging.getLogger(__name__)
 
 
 class ImageService:
@@ -370,12 +374,20 @@ class ImageService:
             return None
         if asset.get("oss_key") and asset.get("oss_url"):
             return {"oss_key": asset["oss_key"], "oss_url": asset["oss_url"]}
-        return self.oss_service.upload_file(
-            local_path,
-            asset_namespace=asset["asset_namespace"],
-            filename=asset["filename"],
-            mime_type=asset.get("mime_type") or self._guess_mime_type(local_path),
-        )
+        try:
+            return self.oss_service.upload_file(
+                local_path,
+                asset_namespace=asset["asset_namespace"],
+                filename=asset["filename"],
+                mime_type=asset.get("mime_type") or self._guess_mime_type(local_path),
+            )
+        except Exception:
+            logger.exception(
+                "Failed to upload image to OSS for asset_namespace=%s filename=%s; falling back to local asset.",
+                asset.get("asset_namespace"),
+                asset.get("filename"),
+            )
+            return None
 
     def _ensure_remote_url(self, asset: dict[str, Any], *, file_path: Path) -> str:
         if not self.oss_service or not self.oss_service.enabled:
@@ -389,7 +401,15 @@ class ImageService:
         if asset.get("oss_url") and self.settings.aliyun_oss_public_base_url:
             return asset["oss_url"]
         if oss_key:
-            fresh_url = self.oss_service.get_object_url(oss_key)
+            try:
+                fresh_url = self.oss_service.get_object_url(oss_key)
+            except Exception:
+                logger.exception(
+                    "Failed to build OSS URL for asset_namespace=%s filename=%s; falling back to local asset.",
+                    asset.get("asset_namespace"),
+                    asset.get("filename"),
+                )
+                return ""
             asset["oss_url"] = fresh_url
             return fresh_url
         return ""
