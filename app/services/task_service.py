@@ -87,25 +87,23 @@ class TaskService:
         if not task:
             return None
 
-        payload = dict(task)
+        payload = self._build_task_summary(task)
         result = self.task_repository.get_result(int(task_id))
-        if result:
-            payload["article"] = self.writer_service.present_article(
+        payload["article"] = (
+            self.writer_service.present_article(
                 asset_namespace=payload["cache_key"],
                 article=result["article"],
                 include_cover=payload.get("include_cover", 1),
                 content_image_count=payload.get("content_image_count", 3),
             )
-        else:
-            payload["article"] = None
-
-        payload["progress"] = {
-            "total": 1,
-            "completed": 1 if payload["status"] == "completed" else 0,
-            "failed": 1 if payload["status"] == "failed" else 0,
-            "cached": 1 if payload["cache_hit"] else 0,
-        }
+            if result
+            else None
+        )
         return payload
+
+    def list_tasks(self, limit: int = 10) -> list[dict[str, Any]]:
+        tasks = self.task_repository.list_tasks(max(1, min(50, int(limit))))
+        return [self._build_task_summary(task) for task in tasks]
 
     def _run_task(self, task_id: int) -> None:
         task = self.task_repository.get_task(task_id)
@@ -184,3 +182,14 @@ class TaskService:
                 error_message=str(exc),
                 completed_at=utcnow_iso(),
             )
+
+    @staticmethod
+    def _build_task_summary(task: dict[str, Any]) -> dict[str, Any]:
+        payload = dict(task)
+        payload["progress"] = {
+            "total": 1,
+            "completed": 1 if payload["status"] == "completed" else 0,
+            "failed": 1 if payload["status"] == "failed" else 0,
+            "cached": 1 if payload["cache_hit"] else 0,
+        }
+        return payload

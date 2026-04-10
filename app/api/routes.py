@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -14,6 +14,8 @@ from .schemas import (
     TaskCreateRequest,
     TaskCreateResponse,
     TaskDetailResponse,
+    TaskListData,
+    TaskListResponse,
     TokenExchangeData,
     TokenExchangeRequest,
     TokenExchangeResponse,
@@ -113,6 +115,34 @@ def create_api_router(services: AppServices) -> APIRouter:
                 access_tier=auth_payload["tier"],
             )
         )
+
+    @router.get(
+        "/tasks",
+        tags=["tasks"],
+        response_model=TaskListResponse,
+        responses={401: {"model": ErrorResponse}},
+        summary="Fetch the latest async tasks",
+    )
+    async def list_tasks(
+        limit: int = Query(default=10, ge=1, le=50),
+        authorization: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    ) -> TaskListResponse | JSONResponse:
+        auth_payload = resolve_auth_payload(services, authorization)
+        if not auth_payload:
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"success": False, "message": "valid bearer token is required"},
+            )
+
+        try:
+            tasks = services.task_service.list_tasks(limit=limit)
+        except Exception:
+            logger.exception("Task service unavailable while listing tasks.")
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"success": False, "message": "task service is temporarily unavailable"},
+            )
+        return TaskListResponse(data=TaskListData(tasks=tasks))
 
     @router.get(
         "/tasks/{task_id}",

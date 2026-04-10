@@ -13,6 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const results = document.getElementById("results");
   const apiJson = document.getElementById("api-json");
   const clearBtn = document.getElementById("clear-results");
+  const recentTasks = document.getElementById("recent-tasks");
   let pollTimer = null;
   let accessToken = "";
 
@@ -69,6 +70,103 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
   }
 
+  function formatDate(value) {
+    if (!value) {
+      return "Not available";
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+  }
+
+  function formatProgress(task) {
+    const progress = task.progress || {};
+    if (task.status === "completed") {
+      return progress.cached ? "Completed · cache hit" : "Completed";
+    }
+    if (task.status === "failed") {
+      return "Failed";
+    }
+    return "In progress";
+  }
+
+  function renderRecentTasks(tasks) {
+    if (!accessToken) {
+      recentTasks.innerHTML = '<div class="empty">Exchange a bearer token to load the latest task records.</div>';
+      return;
+    }
+
+    if (!Array.isArray(tasks) || !tasks.length) {
+      recentTasks.innerHTML = '<div class="empty">No tasks have been created yet.</div>';
+      return;
+    }
+
+    recentTasks.innerHTML = tasks
+      .map((task) => {
+        const statusClass =
+          task.status === "failed" ? "pill-failed" : task.status === "completed" ? "pill-done" : "";
+        const displayTitle = task.article_title || task.keyword || `Task ${task.task_id}`;
+        const subTitle = task.article_title ? task.keyword : task.category?.toUpperCase() || "Task";
+        const previewButton =
+          task.status === "completed"
+            ? `<button class="btn btn-ghost btn-small recent-task-preview" type="button" data-task-id="${task.task_id}">详情预览</button>`
+            : "";
+
+        return `
+          <article class="recent-task-card">
+            <div class="recent-task-main">
+              <div class="recent-task-title-row">
+                <strong>${escapeHtml(displayTitle)}</strong>
+                <div class="recent-task-pills">
+                  <span class="pill ${statusClass}">${escapeHtml(task.status)}</span>
+                  ${task.cache_hit ? '<span class="pill pill-cache">cache</span>' : ""}
+                  ${task.access_tier ? `<span class="pill">${escapeHtml(task.access_tier)}</span>` : ""}
+                </div>
+              </div>
+              <div class="recent-task-subtitle">${escapeHtml(subTitle)}</div>
+              <div class="recent-task-metrics">
+                <span>ID #${escapeHtml(task.task_id)}</span>
+                <span>${escapeHtml(formatProgress(task))}</span>
+                <span>${escapeHtml(task.language || "English")}</span>
+                <span>${escapeHtml((task.word_limit || 1200) + " words")}</span>
+                <span>${escapeHtml(formatDate(task.created_at))}</span>
+              </div>
+              ${task.error_message ? `<div class="recent-task-error">${escapeHtml(task.error_message)}</div>` : ""}
+            </div>
+            <div class="recent-task-actions">
+              ${previewButton}
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+
+    recentTasks.querySelectorAll(".recent-task-preview").forEach((button) => {
+      button.addEventListener("click", () => {
+        const taskId = Number(button.dataset.taskId || 0);
+        if (taskId > 0) {
+          fetchTask(taskId);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      });
+    });
+  }
+
+  async function refreshRecentTasks() {
+    if (!accessToken) {
+      renderRecentTasks([]);
+      return;
+    }
+    const result = await requestJson("/api/tasks?limit=10", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const payload = result.data || {};
+    if (!payload.success) {
+      recentTasks.innerHTML = `<div class="empty">${escapeHtml(payload.message || "Unable to load recent tasks.")}</div>`;
+      return;
+    }
+    renderRecentTasks(payload.data?.tasks || []);
+  }
+
   function bindShellTabs() {
     document.querySelectorAll(".shell-tab-button").forEach((button) => {
       button.addEventListener("click", () => {
@@ -109,6 +207,7 @@ document.addEventListener("DOMContentLoaded", () => {
       tokenMeta.textContent = `${tier.toUpperCase()} access · expires at ${expiresAt}`;
       tokenValue.textContent = accessToken;
       tokenDisplay.classList.remove("hidden");
+      refreshRecentTasks();
       return;
     }
 
@@ -117,6 +216,7 @@ document.addEventListener("DOMContentLoaded", () => {
     tokenMeta.textContent = "Standard access · valid for 1 day";
     tokenValue.textContent = "";
     tokenDisplay.classList.add("hidden");
+    renderRecentTasks([]);
   }
 
   function renderResults(task) {
@@ -222,6 +322,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const task = payload.data;
     renderResults(task);
+    refreshRecentTasks();
 
     if (!["completed", "failed", "partial_failed"].includes(task.status)) {
       pollTimer = setTimeout(() => fetchTask(taskId), 1500);
@@ -338,6 +439,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     taskMeta.textContent = `Task ${data.data.task_id} created · ${data.data.access_tier || "authorized"}`;
     apiJson.textContent = JSON.stringify(data, null, 2);
+    refreshRecentTasks();
     fetchTask(data.data.task_id);
   });
 

@@ -60,6 +60,15 @@ class TaskCreateResponse(BaseModel):
     data: TaskAcceptedData
 
 
+class TaskListData(BaseModel):
+    tasks: list[dict[str, Any]]
+
+
+class TaskListResponse(BaseModel):
+    success: bool = True
+    data: TaskListData
+
+
 class TaskDetailResponse(BaseModel):
     success: bool = True
     data: dict[str, Any]

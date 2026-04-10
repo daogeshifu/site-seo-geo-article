@@ -31,6 +31,8 @@ class TaskRepository(Protocol):
 
     def get_task(self, task_id: int) -> dict[str, Any] | None: ...
 
+    def list_tasks(self, limit: int = 10) -> list[dict[str, Any]]: ...
+
     def find_reusable_task(
         self,
         *,
@@ -90,6 +92,25 @@ class MemoryTaskRepository:
         with self._lock:
             task = self._tasks.get(int(task_id))
             return deepcopy(task) if task else None
+
+    def list_tasks(self, limit: int = 10) -> list[dict[str, Any]]:
+        with self._lock:
+            items = sorted(self._tasks.values(), key=lambda item: int(item.get("task_id", 0)), reverse=True)
+            rows: list[dict[str, Any]] = []
+            for task in items[: max(1, int(limit))]:
+                row = deepcopy(task)
+                result = self._results.get(int(task.get("task_id", 0)))
+                if result:
+                    row["article_title"] = result.get("article_title")
+                    row["meta_title"] = result.get("meta_title")
+                    row["meta_description"] = result.get("meta_description")
+                    row["generation_mode"] = result.get("generation_mode")
+                    row["image_generation_mode"] = result.get("image_generation_mode")
+                    row["has_result"] = True
+                else:
+                    row["has_result"] = False
+                rows.append(row)
+            return rows
 
     def find_reusable_task(
         self,
@@ -224,6 +245,30 @@ class MySQLTaskRepository:
 
         row = self._run_with_retry(_operation)
         return _serialize_task_row(row) if row else None
+
+    def list_tasks(self, limit: int = 10) -> list[dict[str, Any]]:
+        def _operation(connection: Any) -> list[dict[str, Any]]:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT
+                        t.*,
+                        r.article_title,
+                        r.meta_title,
+                        r.meta_description,
+                        r.generation_mode,
+                        r.image_generation_mode
+                    FROM {TASK_TABLE} AS t
+                    LEFT JOIN {RESULT_TABLE} AS r ON r.task_id = t.id
+                    ORDER BY t.id DESC
+                    LIMIT %s
+                    """,
+                    (max(1, int(limit)),),
+                )
+                return cursor.fetchall() or []
+
+        rows = self._run_with_retry(_operation)
+        return [_serialize_task_row(row) for row in rows]
 
     def find_reusable_task(
         self,
@@ -538,7 +583,7 @@ def _serialize_task_row(row: dict[str, Any]) -> dict[str, Any]:
     include_cover = max(0, min(1, _as_int(row.get("include_cover"), 1)))
     content_image_count = max(0, min(3, _as_int(row.get("content_image_count"), 0)))
     word_limit = max(200, min(10000, _as_int(row.get("word_limit"), 1200)))
-    return {
+    payload = {
         "task_id": _as_int(row.get("id"), 0),
         "category": str(row.get("category") or ""),
         "keyword": str(row.get("keyword") or ""),
@@ -557,6 +602,17 @@ def _serialize_task_row(row: dict[str, Any]) -> dict[str, Any]:
         "updated_at": _db_datetime_to_iso(row.get("updated_at")),
         "completed_at": _db_datetime_to_iso(row.get("completed_at")),
     }
+    if "article_title" in row:
+        payload["article_title"] = row.get("article_title")
+        payload["meta_title"] = row.get("meta_title")
+        payload["meta_description"] = row.get("meta_description")
+        payload["generation_mode"] = row.get("generation_mode")
+        payload["image_generation_mode"] = row.get("image_generation_mode")
+        payload["has_result"] = any(
+            row.get(field) is not None
+            for field in ("article_title", "meta_title", "meta_description", "generation_mode", "image_generation_mode")
+        )
+    return payload
 
 
 def _serialize_result_row(row: dict[str, Any]) -> dict[str, Any]:

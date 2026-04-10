@@ -310,6 +310,68 @@ def test_word_limit_creates_distinct_task_when_changed(tmp_path: Path) -> None:
     assert second_task["word_limit"] == 1800
 
 
+def test_list_tasks_returns_recent_entries_in_desc_order(tmp_path: Path) -> None:
+    app = create_app(
+        {
+            "data_dir": tmp_path,
+            "llm_mock_mode": True,
+            "openai_api_key": "",
+            "normal_access_key": "test-standard-key",
+            "vip_access_key": "test-vip-key",
+            "token_signing_secret": "test-signing-secret",
+        }
+    )
+    client = TestClient(app)
+    token_data = issue_token(client)
+    bearer = {"Authorization": f"Bearer {token_data['access_token']}"}
+
+    first_response = client.post(
+        "/api/tasks",
+        headers=bearer,
+        json={
+            "category": "seo",
+            "keyword": "first recent task",
+            "info": "Brand: VoltGo",
+            "include_cover": 0,
+            "content_image_count": 0,
+        },
+    )
+    assert first_response.status_code == 200
+    first_task_id = first_response.json()["data"]["task_id"]
+    wait_for_task_completion(client, bearer, first_task_id)
+
+    second_response = client.post(
+        "/api/tasks",
+        headers=bearer,
+        json={
+            "category": "geo",
+            "keyword": "second recent task",
+            "info": "Brand: VoltGo",
+            "include_cover": 0,
+            "content_image_count": 0,
+        },
+    )
+    assert second_response.status_code == 200
+    second_task_id = second_response.json()["data"]["task_id"]
+    wait_for_task_completion(client, bearer, second_task_id)
+
+    response = client.get("/api/tasks?limit=10", headers=bearer)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    tasks = payload["data"]["tasks"]
+    assert [task["task_id"] for task in tasks[:2]] == [second_task_id, first_task_id]
+    assert tasks[0]["article_title"]
+    assert tasks[0]["progress"]["total"] == 1
+    assert tasks[0]["status"] == "completed"
+
+    limited = client.get("/api/tasks?limit=1", headers=bearer)
+    assert limited.status_code == 200
+    limited_tasks = limited.json()["data"]["tasks"]
+    assert len(limited_tasks) == 1
+    assert limited_tasks[0]["task_id"] == second_task_id
+
+
 def test_index_renders_token_and_task_console(tmp_path: Path) -> None:
     app = create_app(
         {
@@ -332,6 +394,7 @@ def test_index_renders_token_and_task_console(tmp_path: Path) -> None:
     assert "content_image_count" in html
     assert "/api/tasks" in html
     assert "/api/token" in html
+    assert "Recent Tasks" in html
 
 
 def test_openapi_only_exposes_task_endpoints(tmp_path: Path) -> None:
