@@ -265,6 +265,7 @@ curl -X POST http://127.0.0.1:8028/api/tasks \
     "keyword": "portable charger on plane",
     "info": "Brand: VoltGo. Product: 20000mAh portable charger for travel.",
     "language": "English",
+    "word_limit": 1200,
     "include_cover": 1,
     "content_image_count": 2
   }'
@@ -324,7 +325,7 @@ Response:
 }
 ```
 
-任务元数据和最终文章结果现在分别持久化到 MySQL 的 `article_tasks` 与 `article_task_results` 表；文件缓存仍按 `category + keyword + info` 维度保留在本地 `data/cache/` 下。
+任务元数据和最终文章结果现在分别持久化到 MySQL 的 `article_tasks` 与 `article_task_results` 表；文件缓存按 `category + keyword + info + word_limit` 维度保留在本地 `data/cache/` 下。
 
 ---
 
@@ -333,13 +334,13 @@ Response:
 缓存粒度是单关键词。
 
 ```text
-cache_key = sha256(category + normalized_keyword + normalized_info)
+cache_key = sha256(category + normalized_keyword + normalized_info + word_limit)
 ```
 
 这意味着：
 
 - 每次任务只处理一个关键词
-- 如果 `category + keyword + info` 完全一致，会直接返回缓存结果
+- 如果 `category + keyword + info + word_limit` 完全一致，会直接返回缓存结果
 - 相同词但品牌信息不同，会视为不同生成结果
 
 ---

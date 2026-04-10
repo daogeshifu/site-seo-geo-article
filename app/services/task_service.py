@@ -33,6 +33,7 @@ class TaskService:
         keyword: str,
         info: str,
         language: str = "English",
+        word_limit: int = 1200,
         force_refresh: bool = False,
         include_cover: int = 1,
         content_image_count: int = 3,
@@ -42,6 +43,7 @@ class TaskService:
         normalized_keyword = keyword.strip()
         normalized_language = (language or "English").strip() or "English"
         normalized_info = info or ""
+        normalized_word_limit = max(200, min(10000, int(word_limit)))
 
         if not normalized_keyword:
             raise ValueError("A keyword is required.")
@@ -52,6 +54,7 @@ class TaskService:
                 keyword=normalized_keyword,
                 info=normalized_info,
                 language=normalized_language,
+                word_limit=normalized_word_limit,
             )
             if reusable_task:
                 return self.get_task(int(reusable_task["task_id"])) or reusable_task
@@ -62,11 +65,17 @@ class TaskService:
                 "keyword": normalized_keyword,
                 "info": normalized_info,
                 "language": normalized_language,
+                "word_limit": normalized_word_limit,
                 "force_refresh": bool(force_refresh),
                 "include_cover": max(0, min(1, int(include_cover))),
                 "content_image_count": max(0, min(3, int(content_image_count))),
                 "access_tier": access_tier,
-                "cache_key": self.cache_service.build_key(normalized_category, normalized_keyword, normalized_info),
+                "cache_key": self.cache_service.build_key(
+                    normalized_category,
+                    normalized_keyword,
+                    normalized_info,
+                    normalized_word_limit,
+                ),
                 "status": "queued",
             }
         )
@@ -111,7 +120,12 @@ class TaskService:
         try:
             cached = None
             if not task["force_refresh"]:
-                cached = self.cache_service.get(task["category"], task["keyword"], task["info"])
+                cached = self.cache_service.get(
+                    task["category"],
+                    task["keyword"],
+                    task["info"],
+                    task.get("word_limit", 1200),
+                )
 
             if cached:
                 article = cached["article"]
@@ -126,7 +140,13 @@ class TaskService:
                         include_cover=task.get("include_cover", 1),
                         content_image_count=task.get("content_image_count", 0),
                     )
-                    self.cache_service.set(task["category"], task["keyword"], task["info"], article)
+                    self.cache_service.set(
+                        task["category"],
+                        task["keyword"],
+                        task["info"],
+                        article,
+                        task.get("word_limit", 1200),
+                    )
                 cache_hit = True
             else:
                 article = self.writer_service.generate(
@@ -135,10 +155,17 @@ class TaskService:
                     keyword=task["keyword"],
                     info=task["info"],
                     language=task["language"],
+                    word_limit=task.get("word_limit", 1200),
                     include_cover=task.get("include_cover", 1),
                     content_image_count=task.get("content_image_count", 0),
                 )
-                self.cache_service.set(task["category"], task["keyword"], task["info"], article)
+                self.cache_service.set(
+                    task["category"],
+                    task["keyword"],
+                    task["info"],
+                    article,
+                    task.get("word_limit", 1200),
+                )
                 cache_hit = False
 
             self.task_repository.save_result(task_id, article)

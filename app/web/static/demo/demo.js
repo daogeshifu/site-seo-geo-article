@@ -313,6 +313,7 @@ document.addEventListener("DOMContentLoaded", () => {
       keyword: formData.get("keyword"),
       info: formData.get("info"),
       force_refresh: formData.get("force_refresh") === "true",
+      word_limit: Number(formData.get("word_limit") || 1200),
       include_cover: Number(formData.get("include_cover") || 1),
       content_image_count: Number(formData.get("content_image_count") || 3),
     };

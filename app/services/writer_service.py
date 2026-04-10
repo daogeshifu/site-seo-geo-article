@@ -26,18 +26,33 @@ class WriterService:
         keyword: str,
         info: str,
         language: str = "English",
+        word_limit: int = 1200,
         include_cover: int = 1,
         content_image_count: int = 3,
     ) -> dict[str, Any]:
+        normalized_word_limit = max(200, int(word_limit))
         if self.llm_client.enabled:
             strategy_prompt = build_strategy_prompt(category, keyword, info, language)
             raw_strategy = self.llm_client.complete(strategy_prompt, expect_json=True)
             strategy = extract_json_object(raw_strategy)
 
-            draft_prompt = build_draft_prompt(category, keyword, info, language, strategy)
+            draft_prompt = build_draft_prompt(
+                category,
+                keyword,
+                info,
+                language,
+                strategy,
+                normalized_word_limit,
+            )
             draft_html = self.llm_client.complete(draft_prompt)
 
-            polish_prompt = build_polish_prompt(category, language, keyword, draft_html)
+            polish_prompt = build_polish_prompt(
+                category,
+                language,
+                keyword,
+                draft_html,
+                normalized_word_limit,
+            )
             polished_html = self.llm_client.complete(polish_prompt)
 
             article = self._package_article(
@@ -48,6 +63,7 @@ class WriterService:
                 strategy=strategy,
                 html=polished_html.strip(),
                 generation_mode="llm",
+                word_limit=normalized_word_limit,
             )
             return self._attach_images(
                 asset_namespace=asset_namespace,
@@ -64,6 +80,7 @@ class WriterService:
             keyword=keyword,
             info=info,
             language=language,
+            word_limit=normalized_word_limit,
         )
         return self._attach_images(
             asset_namespace=asset_namespace,
@@ -147,6 +164,7 @@ class WriterService:
         strategy: dict[str, Any],
         html: str,
         generation_mode: str,
+        word_limit: int,
     ) -> dict[str, Any]:
         title = (
             (strategy.get("h1_options") or [keyword])[0]
@@ -169,6 +187,7 @@ class WriterService:
             "html": html,
             "strategy": strategy,
             "generation_mode": generation_mode,
+            "word_limit": int(word_limit),
             "images": [],
             "cover_image": None,
             "content_images": [],
@@ -182,6 +201,7 @@ class WriterService:
         keyword: str,
         info: str,
         language: str,
+        word_limit: int,
     ) -> dict[str, Any]:
         brand_line = info.strip() or "Use your real brand, product facts, and proof here."
 
@@ -328,6 +348,7 @@ class WriterService:
             strategy=strategy,
             html=html,
             generation_mode="mock",
+            word_limit=word_limit,
         )
         return article
 

@@ -100,6 +100,7 @@ def build_draft_prompt(
     info: str,
     language: str,
     strategy: dict,
+    word_limit: int = 1200,
 ) -> str:
     if category == "seo":
         return dedent(
@@ -122,7 +123,7 @@ def build_draft_prompt(
               3. H2/H3 body sections
               4. conclusion
               5. FAQ section with 2-4 questions
-            - Target roughly 1000-1500 words
+            - Target approximately {word_limit} words/characters of textual content (excluding any image content)
             - Main keyword must appear naturally in H1, intro, and conclusion
             - Paragraphs should stay compact and readable
             - Use long-tail keywords naturally, never stuff them
@@ -152,6 +153,7 @@ def build_draft_prompt(
           4. references / evidence guidance
           5. conclusion
           6. FAQ
+        - Target approximately {word_limit} words/characters of textual content (excluding any image content)
         - Use short, extractable paragraphs
         - Make headings easy for AI systems to quote or summarize
         - Mention citations, proof, benchmark data, or source types without inventing fake source URLs
@@ -160,7 +162,7 @@ def build_draft_prompt(
     ).strip()
 
 
-def build_polish_prompt(category: str, language: str, keyword: str, html: str) -> str:
+def build_polish_prompt(category: str, language: str, keyword: str, html: str, word_limit: int = 1200) -> str:
     flavor = (
         "Improve naturalness, specificity, and SEO readability."
         if category == "seo"
@@ -177,6 +179,7 @@ def build_polish_prompt(category: str, language: str, keyword: str, html: str) -
         - Do not change the core meaning
         - Keep the article in {language}
         - Keep the keyword "{keyword}" naturally present
+        - Keep textual content close to {word_limit} words/characters (excluding image content)
         - Return HTML only
 
         Article:

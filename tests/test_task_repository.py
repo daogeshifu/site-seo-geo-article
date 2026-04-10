@@ -24,6 +24,7 @@ class _DummyConnection:
 def _build_mysql_repo_for_unit_test(monkeypatch: pytest.MonkeyPatch) -> task_repository.MySQLTaskRepository:
     monkeypatch.setattr(task_repository.MySQLTaskRepository, "_ensure_database", lambda self: None)
     monkeypatch.setattr(task_repository.MySQLTaskRepository, "_ensure_tables", lambda self: None)
+    monkeypatch.setattr(task_repository.MySQLTaskRepository, "_ensure_task_columns", lambda self: None)
     settings = Settings(
         mysql_host="127.0.0.1",
         mysql_user="demo",

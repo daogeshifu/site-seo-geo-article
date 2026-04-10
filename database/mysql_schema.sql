@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS `article_tasks` (
   `keyword` VARCHAR(255) NOT NULL COMMENT 'Single keyword for this task',
   `info` TEXT NOT NULL COMMENT 'Brand / product / business context',
   `language` VARCHAR(32) NOT NULL DEFAULT 'English' COMMENT 'Requested article language',
+  `word_limit` INT UNSIGNED NOT NULL DEFAULT 1200 COMMENT 'Target text length limit (excluding image content)',
   `force_refresh` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Ignore reusable cache when 1',
   `include_cover` TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'Whether to generate a cover image: 0 or 1',
   `content_image_count` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Number of body images to generate: 0-3',

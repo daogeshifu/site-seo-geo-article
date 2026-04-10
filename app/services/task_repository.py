@@ -38,6 +38,7 @@ class TaskRepository(Protocol):
         keyword: str,
         info: str,
         language: str,
+        word_limit: int,
     ) -> dict[str, Any] | None: ...
 
     def update_task(self, task_id: int, **fields: Any) -> None: ...
@@ -97,6 +98,7 @@ class MemoryTaskRepository:
         keyword: str,
         info: str,
         language: str,
+        word_limit: int,
     ) -> dict[str, Any] | None:
         with self._lock:
             matches = [
@@ -106,6 +108,7 @@ class MemoryTaskRepository:
                 and task.get("keyword") == keyword
                 and task.get("info") == info
                 and task.get("language") == language
+                and int(task.get("word_limit", 1200)) == int(word_limit)
                 and task.get("status") == "completed"
                 and int(task.get("task_id", 0)) in self._results
             ]
@@ -155,6 +158,7 @@ class MySQLTaskRepository:
         self._connection_pool: LifoQueue[Any] = LifoQueue(maxsize=self.pool_size)
         self._ensure_database()
         self._ensure_tables()
+        self._ensure_task_columns()
 
     def create_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         now = _utcnow_db()
@@ -168,6 +172,7 @@ class MySQLTaskRepository:
                         keyword,
                         info,
                         language,
+                        word_limit,
                         force_refresh,
                         include_cover,
                         content_image_count,
@@ -179,13 +184,14 @@ class MySQLTaskRepository:
                         created_at,
                         updated_at,
                         completed_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         payload["category"],
                         payload["keyword"],
                         payload["info"],
                         payload["language"],
+                        int(payload.get("word_limit", 1200)),
                         int(bool(payload["force_refresh"])),
                         int(payload["include_cover"]),
                         int(payload["content_image_count"]),
@@ -226,6 +232,7 @@ class MySQLTaskRepository:
         keyword: str,
         info: str,
         language: str,
+        word_limit: int,
     ) -> dict[str, Any] | None:
         def _operation(connection: Any) -> dict[str, Any] | None:
             with connection.cursor() as cursor:
@@ -238,11 +245,12 @@ class MySQLTaskRepository:
                       AND t.keyword = %s
                       AND t.info = %s
                       AND t.language = %s
+                      AND t.word_limit = %s
                       AND t.status = 'completed'
                     ORDER BY t.id DESC
                     LIMIT 1
                     """,
-                    (category, keyword, info, language),
+                    (category, keyword, info, language, int(word_limit)),
                 )
                 return cursor.fetchone()
 
@@ -483,6 +491,40 @@ class MySQLTaskRepository:
 
         self._run_with_retry(_operation)
 
+    def _ensure_task_columns(self) -> None:
+        def _column_exists(connection: Any, column_name: str) -> bool:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT 1
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = %s
+                      AND TABLE_NAME = %s
+                      AND COLUMN_NAME = %s
+                    LIMIT 1
+                    """,
+                    (self.database_name, TASK_TABLE, column_name),
+                )
+                return bool(cursor.fetchone())
+
+        if self._run_with_retry(lambda conn: _column_exists(conn, "word_limit")):
+            return
+
+        logger.warning("MySQL column `%s.word_limit` is missing; adding it automatically.", TASK_TABLE)
+
+        def _add_column(connection: Any) -> None:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    ALTER TABLE {TASK_TABLE}
+                    ADD COLUMN word_limit INT UNSIGNED NOT NULL DEFAULT 1200
+                    COMMENT 'Target text length limit (excluding image content)'
+                    AFTER language
+                    """
+                )
+
+        self._run_with_retry(_add_column)
+
 
 def _utcnow_db() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -495,12 +537,14 @@ def _utcnow_iso() -> str:
 def _serialize_task_row(row: dict[str, Any]) -> dict[str, Any]:
     include_cover = max(0, min(1, _as_int(row.get("include_cover"), 1)))
     content_image_count = max(0, min(3, _as_int(row.get("content_image_count"), 0)))
+    word_limit = max(200, min(10000, _as_int(row.get("word_limit"), 1200)))
     return {
         "task_id": _as_int(row.get("id"), 0),
         "category": str(row.get("category") or ""),
         "keyword": str(row.get("keyword") or ""),
         "info": str(row.get("info") or ""),
         "language": str(row.get("language") or "English"),
+        "word_limit": word_limit,
         "force_refresh": _as_bool(row.get("force_refresh"), False),
         "include_cover": include_cover,
         "content_image_count": content_image_count,

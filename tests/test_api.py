@@ -72,6 +72,7 @@ def test_create_task_and_fetch_result(tmp_path: Path) -> None:
     assert task_payload is not None
     assert task_payload["access_tier"] == "vip"
     assert task_payload["keyword"] == "portable charger on plane"
+    assert task_payload["word_limit"] == 1200
     assert task_payload["article"]["generation_mode"] == "mock"
     assert len(task_payload["article"]["images"]) == 3
     assert task_payload["article"]["cover_image"] is not None
@@ -252,6 +253,61 @@ def test_reuse_existing_task_when_force_refresh_is_false(tmp_path: Path) -> None
     assert third_response.status_code == 200
     third_task_id = third_response.json()["data"]["task_id"]
     assert third_task_id != first_task_id
+
+
+def test_word_limit_creates_distinct_task_when_changed(tmp_path: Path) -> None:
+    app = create_app(
+        {
+            "data_dir": tmp_path,
+            "llm_mock_mode": True,
+            "openai_api_key": "",
+            "normal_access_key": "test-standard-key",
+            "vip_access_key": "test-vip-key",
+            "token_signing_secret": "test-signing-secret",
+        }
+    )
+    client = TestClient(app)
+    token_data = issue_token(client)
+    bearer = {"Authorization": f"Bearer {token_data['access_token']}"}
+
+    first_response = client.post(
+        "/api/tasks",
+        headers=bearer,
+        json={
+            "category": "seo",
+            "keyword": "word limit test keyword",
+            "info": "Brand: VoltGo",
+            "language": "English",
+            "word_limit": 1200,
+            "include_cover": 0,
+            "content_image_count": 0,
+        },
+    )
+    assert first_response.status_code == 200
+    first_task_id = first_response.json()["data"]["task_id"]
+    first_task = wait_for_task_completion(client, bearer, first_task_id)
+    assert first_task["status"] == "completed"
+    assert first_task["word_limit"] == 1200
+
+    second_response = client.post(
+        "/api/tasks",
+        headers=bearer,
+        json={
+            "category": "seo",
+            "keyword": "word limit test keyword",
+            "info": "Brand: VoltGo",
+            "language": "English",
+            "word_limit": 1800,
+            "force_refresh": False,
+            "include_cover": 0,
+            "content_image_count": 0,
+        },
+    )
+    assert second_response.status_code == 200
+    second_task_id = second_response.json()["data"]["task_id"]
+    assert second_task_id != first_task_id
+    second_task = wait_for_task_completion(client, bearer, second_task_id)
+    assert second_task["word_limit"] == 1800
 
 
 def test_index_renders_token_and_task_console(tmp_path: Path) -> None:

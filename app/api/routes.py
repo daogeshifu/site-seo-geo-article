@@ -90,6 +90,7 @@ def create_api_router(services: AppServices) -> APIRouter:
                 keyword=keyword,
                 info=info,
                 language=language,
+                word_limit=payload.word_limit,
                 force_refresh=payload.force_refresh,
                 include_cover=payload.include_cover,
                 content_image_count=payload.content_image_count,
