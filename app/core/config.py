@@ -41,6 +41,10 @@ class Settings:
     aliyun_oss_public_base_url: str = ""
     aliyun_oss_prefix: str = "articles"
     aliyun_oss_url_expire_seconds: int = 86400
+    aliyun_oss_connect_timeout: int = 10
+    aliyun_oss_read_timeout: int = 180
+    aliyun_oss_retry_count: int = 3
+    aliyun_oss_retry_delay_seconds: float = 1.5
     default_content_image_count: int = 3
     normal_access_key: str = ""
     vip_access_key: str = ""
@@ -97,6 +101,10 @@ class Settings:
             aliyun_oss_public_base_url=os.getenv("ALIYUN_OSS_PUBLIC_BASE_URL", "").strip().rstrip("/"),
             aliyun_oss_prefix=os.getenv("ALIYUN_OSS_PREFIX", "articles").strip().strip("/") or "articles",
             aliyun_oss_url_expire_seconds=max(60, int(os.getenv("ALIYUN_OSS_URL_EXPIRE_SECONDS", "86400"))),
+            aliyun_oss_connect_timeout=max(3, int(os.getenv("ALIYUN_OSS_CONNECT_TIMEOUT", "10"))),
+            aliyun_oss_read_timeout=max(5, int(os.getenv("ALIYUN_OSS_READ_TIMEOUT", "180"))),
+            aliyun_oss_retry_count=max(1, int(os.getenv("ALIYUN_OSS_RETRY_COUNT", "3"))),
+            aliyun_oss_retry_delay_seconds=max(0.1, float(os.getenv("ALIYUN_OSS_RETRY_DELAY_SECONDS", "1.5"))),
             default_content_image_count=max(
                 0,
                 min(3, int(os.getenv("DEFAULT_CONTENT_IMAGE_COUNT", "3"))),

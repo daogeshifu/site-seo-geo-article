@@ -251,6 +251,10 @@ docker compose --env-file .env.docker down -v
 | `ALIYUN_OSS_PUBLIC_BASE_URL` | empty | Optional public/custom domain base URL; if empty, private buckets use signed URLs |
 | `ALIYUN_OSS_PREFIX` | `articles` | Object prefix used for uploaded images |
 | `ALIYUN_OSS_URL_EXPIRE_SECONDS` | `86400` | Expiration seconds for signed OSS URLs |
+| `ALIYUN_OSS_CONNECT_TIMEOUT` | `10` | OSS connection timeout seconds |
+| `ALIYUN_OSS_READ_TIMEOUT` | `180` | OSS upload/read timeout seconds |
+| `ALIYUN_OSS_RETRY_COUNT` | `3` | Retry count for transient OSS upload failures |
+| `ALIYUN_OSS_RETRY_DELAY_SECONDS` | `1.5` | Delay between OSS upload retries |
 | `DEFAULT_CONTENT_IMAGE_COUNT` | `3` | Demo default for body image count |
 | `NORMAL_ACCESS_KEY` | empty | Standard access key used to exchange a bearer token |
 | `VIP_ACCESS_KEY` | empty | VIP access key used to exchange a bearer token |
