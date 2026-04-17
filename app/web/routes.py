@@ -13,7 +13,7 @@ def create_web_router(services: AppServices) -> APIRouter:
     @router.get("/", response_class=HTMLResponse, include_in_schema=False)
     async def index(request: Request) -> HTMLResponse:
         context = build_demo_page_context(
-            llm_enabled=services.writer_service.llm_client.enabled,
+            llm_enabled=services.writer_service.llm_client.enabled(),
             image_enabled=services.image_service.enabled,
             image_mode=services.image_service.mode,
         )

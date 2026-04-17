@@ -70,6 +70,7 @@ def create_api_router(services: AppServices) -> APIRouter:
         keyword = payload.keyword.strip()
         info = (payload.info or payload.brand_info or "").strip()
         language = (payload.language or "English").strip() or "English"
+        provider = (payload.provider or "openai").strip().lower()
         auth_payload = resolve_auth_payload(services, authorization)
 
         if category not in {"seo", "geo"}:
@@ -90,12 +91,19 @@ def create_api_router(services: AppServices) -> APIRouter:
                 content={"success": False, "message": "keyword is required"},
             )
 
+        if provider not in {"openai", "anthropic"}:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"success": False, "message": "provider must be openai or anthropic"},
+            )
+
         try:
             task = services.task_service.create_task(
                 category=category,
                 keyword=keyword,
                 info=info,
                 language=language,
+                provider=provider,
                 word_limit=payload.word_limit,
                 force_refresh=payload.force_refresh,
                 include_cover=payload.include_cover,

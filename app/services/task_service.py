@@ -33,6 +33,7 @@ class TaskService:
         keyword: str,
         info: str,
         language: str = "English",
+        provider: str = "openai",
         word_limit: int = 1200,
         force_refresh: bool = False,
         include_cover: int = 1,
@@ -43,6 +44,7 @@ class TaskService:
         normalized_keyword = keyword.strip()
         normalized_language = (language or "English").strip() or "English"
         normalized_info = info or ""
+        normalized_provider = (provider or "openai").strip().lower() or "openai"
         normalized_word_limit = max(200, min(10000, int(word_limit)))
         normalized_access_tier = (access_tier or "standard").strip().lower() or "standard"
 
@@ -57,6 +59,7 @@ class TaskService:
                 language=normalized_language,
                 word_limit=normalized_word_limit,
                 access_tier=normalized_access_tier,
+                provider=normalized_provider,
             )
             if reusable_task:
                 return self.get_task(int(reusable_task["task_id"])) or reusable_task
@@ -67,6 +70,7 @@ class TaskService:
                 "keyword": normalized_keyword,
                 "info": normalized_info,
                 "language": normalized_language,
+                "provider": normalized_provider,
                 "word_limit": normalized_word_limit,
                 "force_refresh": bool(force_refresh),
                 "include_cover": max(0, min(1, int(include_cover))),
@@ -78,6 +82,7 @@ class TaskService:
                     normalized_info,
                     normalized_word_limit,
                     normalized_access_tier,
+                    normalized_provider,
                 ),
                 "status": "queued",
             }
@@ -127,6 +132,7 @@ class TaskService:
                     task["info"],
                     task.get("word_limit", 1200),
                     task.get("access_tier", "standard"),
+                    task.get("provider", "openai"),
                 )
 
             if cached:
@@ -149,6 +155,7 @@ class TaskService:
                         article,
                         task.get("word_limit", 1200),
                         task.get("access_tier", "standard"),
+                        task.get("provider", "openai"),
                     )
                 cache_hit = True
             else:
@@ -158,6 +165,7 @@ class TaskService:
                     keyword=task["keyword"],
                     info=task["info"],
                     language=task["language"],
+                    provider=task.get("provider", "openai"),
                     word_limit=task.get("word_limit", 1200),
                     access_tier=task.get("access_tier", "standard"),
                     include_cover=task.get("include_cover", 1),
@@ -170,6 +178,7 @@ class TaskService:
                     article,
                     task.get("word_limit", 1200),
                     task.get("access_tier", "standard"),
+                    task.get("provider", "openai"),
                 )
                 cache_hit = False
 

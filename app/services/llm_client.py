@@ -11,13 +11,19 @@ class LLMClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    @property
-    def enabled(self) -> bool:
-        return bool((self._azure_enabled() or self._openai_enabled()) and not self.settings.llm_mock_mode)
+    def enabled(self, provider: str = "openai") -> bool:
+        if self.settings.llm_mock_mode:
+            return False
+        if provider == "anthropic":
+            return self._openrouter_enabled()
+        return self._azure_enabled() or self._openai_enabled()
 
-    def complete(self, prompt: str, *, expect_json: bool = False, access_tier: str = "standard") -> str:
-        if not self.enabled:
-            raise RuntimeError("LLM client is disabled. Configure OPENAI_API_KEY or use mock mode.")
+    def complete(self, prompt: str, *, expect_json: bool = False, access_tier: str = "standard", provider: str = "openai") -> str:
+        if not self.enabled(provider):
+            raise RuntimeError("LLM client is disabled. Configure the corresponding API key or use mock mode.")
+
+        if provider == "anthropic":
+            return self._complete_with_openrouter(prompt, expect_json=expect_json, access_tier=access_tier)
 
         if self._azure_enabled():
             return self._complete_with_azure_responses(prompt, expect_json=expect_json, access_tier=access_tier)
@@ -29,10 +35,18 @@ class LLMClient:
     def _openai_enabled(self) -> bool:
         return bool(self.settings.openai_api_key)
 
+    def _openrouter_enabled(self) -> bool:
+        return bool(self.settings.openrouter_api_key)
+
     def _model_for_tier(self, access_tier: str) -> str:
         if (access_tier or "").strip().lower() == "vip":
             return self.settings.azure_openai_vip_model or self.settings.azure_openai_standard_model
         return self.settings.azure_openai_standard_model
+
+    def _openrouter_model_for_tier(self, access_tier: str) -> str:
+        if (access_tier or "").strip().lower() == "vip":
+            return self.settings.openrouter_vip_model or self.settings.openrouter_standard_model
+        return self.settings.openrouter_standard_model
 
     def _complete_with_azure_responses(self, prompt: str, *, expect_json: bool, access_tier: str) -> str:
         response = requests.post(
@@ -111,4 +125,32 @@ class LLMClient:
         choices = payload.get("choices") or []
         if not choices:
             raise RuntimeError("No completion choices returned.")
+        return choices[0]["message"]["content"]
+
+    def _complete_with_openrouter(self, prompt: str, *, expect_json: bool, access_tier: str) -> str:
+        response = requests.post(
+            f"{self.settings.openrouter_base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self.settings.openrouter_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": self._openrouter_model_for_tier(access_tier),
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are a precise writing assistant. Follow formatting rules exactly.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.7,
+                "response_format": {"type": "json_object"} if expect_json else None,
+            },
+            timeout=self.settings.openrouter_request_timeout,
+        )
+        response.raise_for_status()
+        payload: dict[str, Any] = response.json()
+        choices = payload.get("choices") or []
+        if not choices:
+            raise RuntimeError("No completion choices returned from OpenRouter.")
         return choices[0]["message"]["content"]

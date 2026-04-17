@@ -126,6 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <div class="recent-task-metrics">
                 <span>ID #${escapeHtml(task.task_id)}</span>
                 <span>${escapeHtml(formatProgress(task))}</span>
+                <span>${escapeHtml(task.provider === "anthropic" ? "Anthropic (Claude)" : "OpenAI (ChatGPT)")}</span>
                 <span>${escapeHtml(task.language || "English")}</span>
                 <span>${escapeHtml((task.word_limit || 1200) + " words")}</span>
                 <span>${escapeHtml(formatDate(task.created_at))}</span>
@@ -411,6 +412,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const payload = {
       category: formData.get("category"),
       language: formData.get("language"),
+      provider: formData.get("provider") || "openai",
       keyword: formData.get("keyword"),
       info: formData.get("info"),
       force_refresh: formData.get("force_refresh") === "true",

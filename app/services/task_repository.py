@@ -42,6 +42,7 @@ class TaskRepository(Protocol):
         language: str,
         word_limit: int,
         access_tier: str,
+        provider: str = "openai",
     ) -> dict[str, Any] | None: ...
 
     def update_task(self, task_id: int, **fields: Any) -> None: ...
@@ -122,6 +123,7 @@ class MemoryTaskRepository:
         language: str,
         word_limit: int,
         access_tier: str,
+        provider: str = "openai",
     ) -> dict[str, Any] | None:
         with self._lock:
             matches = [
@@ -133,6 +135,7 @@ class MemoryTaskRepository:
                 and task.get("language") == language
                 and int(task.get("word_limit", 1200)) == int(word_limit)
                 and str(task.get("access_tier") or "standard") == access_tier
+                and str(task.get("provider") or "openai") == (provider or "openai")
                 and task.get("status") == "completed"
                 and int(task.get("task_id", 0)) in self._results
             ]
@@ -196,6 +199,7 @@ class MySQLTaskRepository:
                         keyword,
                         info,
                         language,
+                        provider,
                         word_limit,
                         force_refresh,
                         include_cover,
@@ -208,13 +212,14 @@ class MySQLTaskRepository:
                         created_at,
                         updated_at,
                         completed_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         payload["category"],
                         payload["keyword"],
                         payload["info"],
                         payload["language"],
+                        payload.get("provider", "openai"),
                         int(payload.get("word_limit", 1200)),
                         int(bool(payload["force_refresh"])),
                         int(payload["include_cover"]),
@@ -282,6 +287,7 @@ class MySQLTaskRepository:
         language: str,
         word_limit: int,
         access_tier: str,
+        provider: str = "openai",
     ) -> dict[str, Any] | None:
         def _operation(connection: Any) -> dict[str, Any] | None:
             with connection.cursor() as cursor:
@@ -296,11 +302,12 @@ class MySQLTaskRepository:
                       AND t.language = %s
                       AND t.word_limit = %s
                       AND t.access_tier = %s
+                      AND t.provider = %s
                       AND t.status = 'completed'
                     ORDER BY t.id DESC
                     LIMIT 1
                     """,
-                    (category, keyword, info, language, int(word_limit), access_tier),
+                    (category, keyword, info, language, int(word_limit), access_tier, provider or "openai"),
                 )
                 return cursor.fetchone()
 
@@ -557,23 +564,37 @@ class MySQLTaskRepository:
                 )
                 return bool(cursor.fetchone())
 
-        if self._run_with_retry(lambda conn: _column_exists(conn, "word_limit")):
-            return
+        if not self._run_with_retry(lambda conn: _column_exists(conn, "word_limit")):
+            logger.warning("MySQL column `%s.word_limit` is missing; adding it automatically.", TASK_TABLE)
 
-        logger.warning("MySQL column `%s.word_limit` is missing; adding it automatically.", TASK_TABLE)
+            def _add_word_limit(connection: Any) -> None:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        f"""
+                        ALTER TABLE {TASK_TABLE}
+                        ADD COLUMN word_limit INT UNSIGNED NOT NULL DEFAULT 1200
+                        COMMENT 'Target text length limit (excluding image content)'
+                        AFTER language
+                        """
+                    )
 
-        def _add_column(connection: Any) -> None:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    f"""
-                    ALTER TABLE {TASK_TABLE}
-                    ADD COLUMN word_limit INT UNSIGNED NOT NULL DEFAULT 1200
-                    COMMENT 'Target text length limit (excluding image content)'
-                    AFTER language
-                    """
-                )
+            self._run_with_retry(_add_word_limit)
 
-        self._run_with_retry(_add_column)
+        if not self._run_with_retry(lambda conn: _column_exists(conn, "provider")):
+            logger.warning("MySQL column `%s.provider` is missing; adding it automatically.", TASK_TABLE)
+
+            def _add_provider(connection: Any) -> None:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        f"""
+                        ALTER TABLE {TASK_TABLE}
+                        ADD COLUMN provider VARCHAR(32) NOT NULL DEFAULT 'openai'
+                        COMMENT 'LLM provider: openai or anthropic'
+                        AFTER language
+                        """
+                    )
+
+            self._run_with_retry(_add_provider)
 
 
 def _utcnow_db() -> datetime:
@@ -594,6 +615,7 @@ def _serialize_task_row(row: dict[str, Any]) -> dict[str, Any]:
         "keyword": str(row.get("keyword") or ""),
         "info": str(row.get("info") or ""),
         "language": str(row.get("language") or "English"),
+        "provider": str(row.get("provider") or "openai"),
         "word_limit": word_limit,
         "force_refresh": _as_bool(row.get("force_refresh"), False),
         "include_cover": include_cover,

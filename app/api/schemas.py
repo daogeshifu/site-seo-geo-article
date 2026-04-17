@@ -28,6 +28,7 @@ class TaskCreateRequest(BaseModel):
     info: str = ""
     brand_info: str = ""
     language: str = "English"
+    provider: str = Field(default="openai", examples=["openai", "anthropic"])
     word_limit: int = Field(default=1200, ge=200, le=10000)
     force_refresh: bool = False
     include_cover: int = Field(default=1, ge=0, le=1)
@@ -40,6 +41,7 @@ class TaskCreateRequest(BaseModel):
                 "keyword": "portable charger on plane",
                 "info": "Brand: VoltGo. Product: 20000mAh portable charger.",
                 "language": "English",
+                "provider": "openai",
                 "word_limit": 1200,
                 "force_refresh": False,
                 "include_cover": 1,
