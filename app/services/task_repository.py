@@ -589,6 +589,21 @@ class MySQLTaskRepository:
                 )
                 return bool(cursor.fetchone())
 
+        def _column_metadata(connection: Any, column_name: str) -> dict[str, Any] | None:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = %s
+                      AND TABLE_NAME = %s
+                      AND COLUMN_NAME = %s
+                    LIMIT 1
+                    """,
+                    (self.database_name, TASK_TABLE, column_name),
+                )
+                return cursor.fetchone()
+
         if not self._run_with_retry(lambda conn: _column_exists(conn, "word_limit")):
             logger.warning("MySQL column `%s.word_limit` is missing; adding it automatically.", TASK_TABLE)
 
@@ -659,6 +674,24 @@ class MySQLTaskRepository:
                     )
 
             self._run_with_retry(_add_mode_type)
+
+        keyword_metadata = self._run_with_retry(lambda conn: _column_metadata(conn, "keyword"))
+        keyword_data_type = str((keyword_metadata or {}).get("DATA_TYPE") or "").lower()
+        keyword_max_length = (keyword_metadata or {}).get("CHARACTER_MAXIMUM_LENGTH")
+        if keyword_data_type in {"varchar", "char"} and _as_int(keyword_max_length, 0) < 4096:
+            logger.warning("MySQL column `%s.keyword` is too short for outline mode; expanding it automatically.", TASK_TABLE)
+
+            def _expand_keyword_column(connection: Any) -> None:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        f"""
+                        ALTER TABLE {TASK_TABLE}
+                        MODIFY COLUMN keyword TEXT NOT NULL
+                        COMMENT 'Keyword for mode 1, outline content for mode 2'
+                        """
+                    )
+
+            self._run_with_retry(_expand_keyword_column)
 
 
 def _utcnow_db() -> datetime:

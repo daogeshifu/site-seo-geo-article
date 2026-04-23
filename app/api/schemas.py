@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 from typing import Any
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+
+SupportedLanguage = Literal["English", "Chinese", "French", "German", "Dutch"]
+SupportedCountry = Literal["us", "cn", "fr", "de", "nl"]
 
 
 class TokenExchangeRequest(BaseModel):
@@ -28,7 +33,7 @@ class InternalLinkRequest(BaseModel):
 
 
 class TaskContextRequest(BaseModel):
-    country: str = ""
+    country: SupportedCountry = "us"
     market: str = ""
     locale_variant: str = ""
     article_type: str = ""
@@ -46,7 +51,7 @@ class TaskCreateRequest(BaseModel):
     mode_type: int = Field(default=1, ge=1, le=2, examples=[1])
     info: str = ""
     brand_info: str = ""
-    language: str = "English"
+    language: SupportedLanguage = "English"
     provider: str = Field(default="openai", examples=["openai", "anthropic"])
     word_limit: int = Field(default=1200, ge=200, le=10000)
     force_refresh: bool = False
@@ -69,9 +74,6 @@ class TaskCreateRequest(BaseModel):
                 "content_image_count": 2,
                 "task_context": {
                     "country": "de",
-                    "market": "eu",
-                    "article_type": "policy_incentive",
-                    "product_line": "stream",
                     "requires_shopify_link": True,
                     "shopify_url": "https://de.ecoflow.com/products/stream-microinverter",
                 },

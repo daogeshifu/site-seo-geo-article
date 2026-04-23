@@ -97,7 +97,7 @@
           <div class="card-header">
             <div class="card-title">
               <strong>2. Create Task</strong>
-              <span>Submit a single keyword task through the live API after a valid token has been exchanged.</span>
+              <span>Submit a single keyword or outline task through the live API after a valid token has been exchanged.</span>
             </div>
             <span class="pill">Demo Client</span>
           </div>
@@ -119,7 +119,13 @@
               </label>
               <label>
                 Language
-                <input type="text" name="language" value="English" />
+                <select name="language" id="language-select" required>
+                  <option value="English">English</option>
+                  <option value="Chinese">中文</option>
+                  <option value="French">Français</option>
+                  <option value="German">Deutsch</option>
+                  <option value="Dutch">Nederlands</option>
+                </select>
               </label>
               <label>
                 Word Limit
@@ -127,34 +133,12 @@
               </label>
               <label>
                 Country
-                <input type="text" name="country" placeholder="de / au / za / ph" />
-              </label>
-              <label>
-                Market
-                <select name="market">
-                  <option value="">Auto</option>
-                  <option value="eu">EU</option>
-                  <option value="row">ROW</option>
-                </select>
-              </label>
-              <label>
-                Article Type
-                <select name="article_type">
-                  <option value="">General</option>
-                  <option value="policy_incentive">Policy Incentive</option>
-                  <option value="appliance_rebate">Appliance Rebate</option>
-                  <option value="competitor_comparison">Competitor Comparison</option>
-                  <option value="natural_disaster">Natural Disaster</option>
-                </select>
-              </label>
-              <label>
-                Product Line
-                <select name="product_line">
-                  <option value="">General</option>
-                  <option value="stream">STREAM</option>
-                  <option value="delta_3_max">DELTA 3 Max</option>
-                  <option value="delta_3_max_plus">DELTA 3 Max Plus</option>
-                  <option value="wave_3">WAVE 3</option>
+                <select name="country" id="country-select" required>
+                  <option value="us">United States</option>
+                  <option value="cn">China</option>
+                  <option value="fr">France</option>
+                  <option value="de">Germany</option>
+                  <option value="nl">Netherlands</option>
                 </select>
               </label>
               <label>
@@ -174,8 +158,8 @@
                 </select>
               </label>
               <label class="full">
-                Keyword
-                <input type="text" name="keyword" required placeholder="portable charger on plane" />
+                Keyword / Outline
+                <textarea name="keyword" rows="6" required placeholder="Keyword mode:&#10;portable charger on plane&#10;&#10;Outline mode:&#10;# Portable Charger on Plane&#10;## Airline rules&#10;## Battery limits&#10;### Domestic flights&#10;### International flights"></textarea>
               </label>
               <label>
                 Mode Type
@@ -185,8 +169,8 @@
                 </select>
               </label>
               <label class="full">
-                Brand / Product Info or Outline
-                <textarea name="info" rows="6" placeholder="Keyword mode:&#10;Brand: VoltGo&#10;Product: 20000mAh portable charger&#10;Highlights: airline-safe, fast charging, digital display&#10;&#10;Outline mode:&#10;# Portable Charger on Plane&#10;## Airline rules&#10;## Battery limits&#10;### Domestic flights&#10;### International flights"></textarea>
+                Brand / Product Info
+                <textarea name="info" rows="6" placeholder="Brand: VoltGo&#10;Product: 20000mAh portable charger&#10;Highlights: airline-safe, fast charging, digital display"></textarea>
               </label>
               <label class="full">
                 Shopify / Product URL
@@ -205,7 +189,7 @@
                 Force refresh and ignore cache for this run
               </label>
               <div class="token-note">
-                `mode_type` defaults to `1` for keyword mode and uses `2` for outline mode. In outline mode, paste the article outline into `info` and the writer will follow that structure strictly. `task_context` now supports country, market, article type, product line, and early-link requirements. `word_limit` defaults to `1200` and counts only text content (excluding images). `content_image_count` supports `0-3`. When it is `0`, no body images are generated. `include_cover` is only `0` or `1`.
+                `mode_type` defaults to `1` for keyword mode and uses `2` for outline mode. In keyword mode, `keyword` is the target keyword. In outline mode, `keyword` stores the full outline and the writer will follow that structure strictly. `info` always stays as brand / product / customer context. The demo currently supports 5 language-country pairs through dropdowns only: English / United States, Chinese / China, French / France, German / Germany, and Dutch / Netherlands. `word_limit` defaults to `1200` and counts only text content (excluding images). `content_image_count` supports `0-3`. When it is `0`, no body images are generated. `include_cover` is only `0` or `1`.
               </div>
               <div class="actions">
                 <button class="btn btn-primary" type="submit" id="submit-btn">Start Task</button>
@@ -270,7 +254,7 @@
                   </div>
                   <div class="mini-card">
                   <strong>Cache</strong>
-                    <p>Each task stores a single keyword, while cache reuse still keys off category + keyword + normalized brand info.</p>
+                    <p>Each task stores one `keyword` field. In mode 1 it is the keyword; in mode 2 it is the outline. Cache reuse keys off category + keyword + mode type + normalized brand info.</p>
                   </div>
                 </div>
                 <div class="inline-list">

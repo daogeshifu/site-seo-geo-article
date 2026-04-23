@@ -167,12 +167,6 @@ def create_api_router(services: AppServices) -> APIRouter:
                 content={"success": False, "message": "mode_type must be 1 or 2"},
             )
 
-        if mode_type == 2 and not info:
-            return JSONResponse(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                content={"success": False, "message": "info is required when mode_type=2"},
-            )
-
         if provider not in {"openai", "anthropic"}:
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,

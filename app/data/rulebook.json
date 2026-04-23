@@ -60,6 +60,21 @@
         }
       ]
     },
+    "nl": {
+      "market": "eu",
+      "locale_variant": "nl-NL"
+    },
+    "fr": {
+      "market": "eu",
+      "locale_variant": "fr-FR"
+    },
+    "us": {
+      "market": "row",
+      "locale_variant": "en-US"
+    },
+    "cn": {
+      "locale_variant": "zh-CN"
+    },
     "ph": {
       "locale_variant": "en-US"
     },

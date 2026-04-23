@@ -40,7 +40,7 @@ def test_cache_service_separates_entries_by_task_context(tmp_path: Path) -> None
         "Portable Charger",
         "Brand: VoltGo",
         {"title": "au"},
-        {"country": "au", "article_type": "natural_disaster"},
+        {"country": "nl", "article_type": "natural_disaster"},
     )
 
     de_hit = cache.get(
@@ -53,7 +53,7 @@ def test_cache_service_separates_entries_by_task_context(tmp_path: Path) -> None
         "seo",
         "portable charger",
         "Brand: VoltGo",
-        {"country": "au", "article_type": "natural_disaster"},
+        {"country": "nl", "article_type": "natural_disaster"},
     )
 
     assert de_hit is not None

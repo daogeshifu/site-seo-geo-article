@@ -56,13 +56,30 @@ def build_strategy_prompt(
 ) -> str:
     rule_brief = _build_rule_brief(rule_context or {})
     normalized_mode_type = _normalize_mode_type(mode_type)
-    source_label = "Provided outline" if normalized_mode_type == MODE_TYPE_OUTLINE else "Brand or product information"
+    mode_context = (
+        f"""
+        Provided outline from the keyword field:
+        {keyword}
+
+        Brand or product information:
+        {info or "None provided."}
+        """
+        if normalized_mode_type == MODE_TYPE_OUTLINE
+        else f"""
+        Keyword:
+        {keyword}
+
+        Brand or product information:
+        {info or "None provided."}
+        """
+    )
     mode_requirements = (
         """
-            - mode_type=2 means the provided content is the required outline, not optional background info
-            - Preserve the outline hierarchy, heading order, and section intent from the provided outline
+            - mode_type=2 means the keyword field contains the required outline, not a short SEO keyword
+            - Preserve the outline hierarchy, heading order, and section intent from the keyword field
             - Do not invent extra H2/H3 sections unless a minimal structural repair is required
             - If the outline contains an H1, use it as the primary H1 option
+            - Use the brand/product info only as supporting context inside the provided outline
         """
         if normalized_mode_type == MODE_TYPE_OUTLINE
         else ""
@@ -71,10 +88,9 @@ def build_strategy_prompt(
         return dedent(
             f"""
             You are a senior SEO content strategist.
-            Create a writing strategy for the keyword "{keyword}".
+            Create a writing strategy for the requested article.
 
-            {source_label}:
-            {info or "None provided."}
+            {mode_context}
 
             Rule context:
             {rule_brief}
@@ -108,13 +124,13 @@ def build_strategy_prompt(
               3. Use exactly one H1
               4. Structure should be H1, introduction, H2/H3 body, conclusion, FAQ
               5. FAQ should contain 2-4 questions
-              6. Titles must naturally include the main keyword
+              6. Titles should reflect the core topic naturally
             - Outline should target a 1000-1500 word article
             - Headings should be specific, benefit-driven, and not generic
             - Link opportunities should describe relevant anchor ideas and use provided URLs only when available
             - Internal link plan should call out the best early-link placement when rule context requires it
             - Compliance notes should reflect disclaimers, compatibility notes, or banned-term constraints
-            - Image briefs should describe helpful supporting visuals and mention keyword placement advice
+            - Image briefs should describe helpful supporting visuals and mention topic placement advice
             {mode_requirements}
             """
         ).strip()
@@ -122,10 +138,9 @@ def build_strategy_prompt(
     return dedent(
         f"""
         You are a GEO content strategist focused on AI citability and answer extraction.
-        Create a writing strategy for the keyword "{keyword}".
+        Create a writing strategy for the requested article.
 
-        {source_label}:
-        {info or "None provided."}
+        {mode_context}
 
         Rule context:
         {rule_brief}
@@ -164,7 +179,7 @@ def build_strategy_prompt(
           3. FAQ and extractable headings
           4. references and inline citation opportunities
           5. quantified proof blocks
-          6. clear entity alignment between keyword and brand/product info
+          6. clear entity alignment between the topic and brand/product info
           7. TL;DR and update-log friendly structure
         - Headings should mirror user questions and retrieval intents
         - Do not invent external sources; describe the type of evidence needed
@@ -188,13 +203,25 @@ def build_draft_prompt(
 ) -> str:
     rule_brief = _build_rule_brief(rule_context or {})
     normalized_mode_type = _normalize_mode_type(mode_type)
-    source_label = "Provided outline" if normalized_mode_type == MODE_TYPE_OUTLINE else "Brand/Product info"
+    content_context = (
+        f"""
+            Outline from keyword field:
+            {keyword}
+            Brand/Product info: {info or "None provided."}
+        """
+        if normalized_mode_type == MODE_TYPE_OUTLINE
+        else f"""
+            Keyword: {keyword}
+            Brand/Product info: {info or "None provided."}
+        """
+    )
     mode_requirements = (
         """
-            - mode_type=2 means the provided content is a required outline, not optional context
+            - mode_type=2 means the keyword field is a required outline, not a short keyword
             - Follow the provided outline strictly: preserve heading order, heading levels, and section boundaries
             - Do not add, remove, rename, merge, or reorder headings unless the outline is malformed and needs a minimal repair
             - Keep SEO/GEO writing quality inside the provided outline instead of inventing a different structure
+            - Use the brand/product info only as supporting facts, examples, proof, and entity context
         """
         if normalized_mode_type == MODE_TYPE_OUTLINE
         else ""
@@ -205,9 +232,8 @@ def build_draft_prompt(
             You are a senior SEO article writer.
             Use the strategy below to write a complete HTML article.
 
-            Keyword: {keyword}
             Language: {language}
-            {source_label}: {info or "None provided."}
+            {content_context}
             Strategy JSON:
             {strategy}
             Rule context:
@@ -223,9 +249,9 @@ def build_draft_prompt(
               4. conclusion
               5. FAQ section with 2-4 questions
             - Target approximately {word_limit} words/characters of textual content (excluding any image content)
-            - Main keyword must appear naturally in H1, intro, and conclusion
+            - When mode_type=1, keep the main keyword naturally present in H1, intro, and conclusion
             - Paragraphs should stay compact and readable
-            - Use long-tail keywords naturally, never stuff them
+            - When mode_type=1, use long-tail keywords naturally and never stuff them
             - If brand/product info is provided, integrate it naturally without turning the article into a sales page
             - Use provided internal URLs when the strategy includes them; otherwise do not invent URLs
             - Respect all compliance notes, disclaimers, and compatibility constraints from the rule context
@@ -238,9 +264,8 @@ def build_draft_prompt(
         You are a GEO article writer focused on AI-ready answer extraction.
         Use the strategy below to write a complete HTML article.
 
-        Keyword: {keyword}
         Language: {language}
-        {source_label}: {info or "None provided."}
+        {content_context}
         Strategy JSON:
         {strategy}
         Rule context:
@@ -282,9 +307,15 @@ def build_polish_prompt(
         else "Improve citability, answer extraction, and trust signals."
     )
     rule_brief = _build_rule_brief(rule_context or {})
+    normalized_mode_type = _normalize_mode_type(mode_type)
+    topic_requirement = (
+        'Keep the keyword "{keyword}" naturally present'.format(keyword=keyword)
+        if normalized_mode_type == MODE_TYPE_KEYWORD
+        else "Keep the article aligned to the supplied outline and preserve the heading wording intent"
+    )
     mode_requirement = (
-        '- mode_type=2: keep the exact heading structure, order, and section boundaries from the current HTML'
-        if _normalize_mode_type(mode_type) == MODE_TYPE_OUTLINE
+        "- mode_type=2: keep the exact heading structure, order, and section boundaries from the current HTML"
+        if normalized_mode_type == MODE_TYPE_OUTLINE
         else ""
     )
     return dedent(
@@ -297,7 +328,7 @@ def build_polish_prompt(
         - Keep the existing HTML structure intact
         - Do not change the core meaning
         - Keep the article in {language}
-        - Keep the keyword "{keyword}" naturally present
+        - {topic_requirement}
         - Keep textual content close to {word_limit} words/characters (excluding image content)
         - Keep compliance with the following rule context:
         {rule_brief}

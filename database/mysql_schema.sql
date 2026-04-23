@@ -11,7 +11,7 @@ USE `site-seo-geo-article`;
 CREATE TABLE IF NOT EXISTS `article_tasks` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'Task ID returned by the API',
   `category` VARCHAR(16) NOT NULL COMMENT 'Article mode: seo or geo',
-  `keyword` VARCHAR(255) NOT NULL COMMENT 'Single keyword for this task',
+  `keyword` TEXT NOT NULL COMMENT 'Keyword for mode 1, outline content for mode 2',
   `mode_type` TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '1 keyword mode, 2 outline mode',
   `info` TEXT NOT NULL COMMENT 'Brand / product / business context',
   `task_context_json` LONGTEXT NOT NULL COMMENT 'Normalized task context as JSON',
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS `article_tasks` (
   `include_cover` TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'Whether to generate a cover image: 0 or 1',
   `content_image_count` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Number of body images to generate: 0-3',
   `access_tier` VARCHAR(32) NOT NULL DEFAULT 'standard' COMMENT 'Access tier derived from the bearer token',
-  `cache_key` CHAR(64) NOT NULL COMMENT 'Reusable cache key based on category + keyword + info',
+  `cache_key` CHAR(64) NOT NULL COMMENT 'Reusable cache key based on category + keyword + mode_type + info',
   `status` VARCHAR(32) NOT NULL DEFAULT 'queued' COMMENT 'queued, running, completed, failed',
   `cache_hit` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Whether the article result came from cache',
   `error_message` TEXT NULL COMMENT 'Failure reason when status=failed',

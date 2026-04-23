@@ -24,8 +24,8 @@ def test_build_polish_prompt_includes_word_limit() -> None:
 def test_build_draft_prompt_in_outline_mode_requires_strict_structure() -> None:
     prompt = build_draft_prompt(
         "seo",
-        "portable charger",
         "# Portable Charger Guide\n## Airline rules\n## Battery limits",
+        "Brand: VoltGo",
         "English",
         {"h1_options": ["Portable Charger Guide"]},
         {},
@@ -33,4 +33,5 @@ def test_build_draft_prompt_in_outline_mode_requires_strict_structure() -> None:
         2,
     )
     assert "Follow the provided outline strictly" in prompt
-    assert "Provided outline" in prompt
+    assert "Outline from keyword field" in prompt
+    assert "Brand/Product info: Brand: VoltGo" in prompt

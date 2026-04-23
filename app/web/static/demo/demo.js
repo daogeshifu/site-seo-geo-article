@@ -14,8 +14,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const apiJson = document.getElementById("api-json");
   const clearBtn = document.getElementById("clear-results");
   const recentTasks = document.getElementById("recent-tasks");
+  const languageSelect = document.getElementById("language-select");
+  const countrySelect = document.getElementById("country-select");
   let pollTimer = null;
   let accessToken = "";
+  const languageCountryMap = {
+    English: "us",
+    Chinese: "cn",
+    French: "fr",
+    German: "de",
+    Dutch: "nl",
+  };
+  const countryLanguageMap = Object.fromEntries(
+    Object.entries(languageCountryMap).map(([language, country]) => [country, language]),
+  );
 
   async function requestJson(url, options = {}) {
     try {
@@ -89,6 +101,19 @@ document.addEventListener("DOMContentLoaded", () => {
     return "In progress";
   }
 
+  function summarizeTaskKeyword(task) {
+    const raw = String(task?.keyword || "").trim();
+    if (!raw) {
+      return "";
+    }
+    const firstLine = raw.split(/\r?\n/)[0].trim();
+    const compact = (firstLine || raw).replace(/\s+/g, " ").trim();
+    if (task?.mode_type === 2) {
+      return compact.length > 80 ? `${compact.slice(0, 77)}...` : compact;
+    }
+    return compact;
+  }
+
   function renderRecentTasks(tasks) {
     if (!accessToken) {
       recentTasks.innerHTML = '<div class="empty">Exchange a bearer token to load the latest task records.</div>';
@@ -104,8 +129,11 @@ document.addEventListener("DOMContentLoaded", () => {
       .map((task) => {
         const statusClass =
           task.status === "failed" ? "pill-failed" : task.status === "completed" ? "pill-done" : "";
-        const displayTitle = task.article_title || task.keyword || `Task ${task.task_id}`;
-        const subTitle = task.article_title ? task.keyword : task.category?.toUpperCase() || "Task";
+        const keywordSummary = summarizeTaskKeyword(task);
+        const displayTitle = task.article_title || keywordSummary || `Task ${task.task_id}`;
+        const subTitle = task.article_title
+          ? `${task.mode_type === 2 ? "OUTLINE" : "KEYWORD"} · ${keywordSummary || task.category?.toUpperCase() || "Task"}`
+          : task.category?.toUpperCase() || "Task";
         const previewButton =
           task.status === "completed"
             ? `<button class="btn btn-ghost btn-small recent-task-preview" type="button" data-task-id="${task.task_id}">详情预览</button>`
@@ -180,6 +208,25 @@ document.addEventListener("DOMContentLoaded", () => {
         });
       });
     });
+  }
+
+  function syncLanguageAndCountry(source) {
+    if (!languageSelect || !countrySelect) {
+      return;
+    }
+
+    if (source === "language") {
+      const mappedCountry = languageCountryMap[languageSelect.value];
+      if (mappedCountry) {
+        countrySelect.value = mappedCountry;
+      }
+      return;
+    }
+
+    const mappedLanguage = countryLanguageMap[countrySelect.value];
+    if (mappedLanguage) {
+      languageSelect.value = mappedLanguage;
+    }
   }
 
   function bindResultTabs() {
@@ -263,10 +310,11 @@ document.addEventListener("DOMContentLoaded", () => {
       <article class="result-card">
         <div class="result-head">
           <div>
-            <h3>${escapeHtml(task.keyword)}</h3>
+            <h3>${escapeHtml(article.title || summarizeTaskKeyword(task) || `Task ${task.task_id}`)}</h3>
             <div class="result-meta">
               <span class="pill ${statusClass}">${escapeHtml(task.status)}</span>
               ${task.cache_hit ? '<span class="pill pill-cache">cache hit</span>' : ""}
+              <span class="pill">${task.mode_type === 2 ? "outline mode" : "keyword mode"}</span>
               ${article.generation_mode ? `<span class="pill">${escapeHtml(article.generation_mode)}</span>` : ""}
               ${
                 article.image_generation_mode
@@ -280,6 +328,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ${task.error_message ? `<p class="muted" style="color:#b91c1c">${escapeHtml(task.error_message)}</p>` : ""}
         <div class="article-meta">
           <div><strong>Title:</strong> ${escapeHtml(article.title)}</div>
+          <div><strong>${task.mode_type === 2 ? "Outline Summary" : "Keyword"}:</strong> ${escapeHtml(summarizeTaskKeyword(task))}</div>
           <div><strong>Meta Title:</strong> ${escapeHtml(article.meta_title)}</div>
           <div><strong>Meta Description:</strong> ${escapeHtml(article.meta_description)}</div>
         </div>
@@ -389,7 +438,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
           <div class="generation-copy">
             <strong>Generating content now</strong>
-            <div class="generation-subtitle">Analyzing the keyword, building strategy, drafting HTML, and preparing requested visuals.</div>
+            <div class="generation-subtitle">Analyzing the keyword or outline, building strategy, drafting HTML, and preparing requested visuals.</div>
           </div>
           <div class="generation-steps">
             <div class="generation-step"><span class="generation-dot"></span><span>Intent and outline planning</span></div>
@@ -422,9 +471,6 @@ document.addEventListener("DOMContentLoaded", () => {
       content_image_count: Number(formData.get("content_image_count") || 3),
       task_context: {
         country: formData.get("country") || "",
-        market: formData.get("market") || "",
-        article_type: formData.get("article_type") || "",
-        product_line: formData.get("product_line") || "",
         mentions_other_brands: formData.get("mentions_other_brands") === "true",
         requires_shopify_link: formData.get("requires_shopify_link") === "true",
         shopify_url: formData.get("shopify_url") || "",
@@ -465,4 +511,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   renderTokenState(null);
   bindShellTabs();
+  if (languageSelect && countrySelect) {
+    languageSelect.addEventListener("change", () => syncLanguageAndCountry("language"));
+    countrySelect.addEventListener("change", () => syncLanguageAndCountry("country"));
+    syncLanguageAndCountry("language");
+  }
 });

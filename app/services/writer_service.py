@@ -121,7 +121,7 @@ class WriterService:
         article = self.article_validator.apply(
             article,
             category=category,
-            keyword=keyword,
+            keyword=str(article.get("title") or keyword) if normalized_mode_type == 2 else keyword,
             rule_context=rule_context,
         )
         return self._attach_images(
@@ -129,6 +129,7 @@ class WriterService:
             article=article,
             category=category,
             keyword=keyword,
+            mode_type=normalized_mode_type,
             info=info,
             include_cover=include_cover,
             content_image_count=content_image_count,
@@ -151,6 +152,7 @@ class WriterService:
             article=article,
             category=category,
             keyword=keyword,
+            mode_type=mode_type,
             info=info,
             include_cover=include_cover,
             content_image_count=content_image_count,
@@ -268,10 +270,10 @@ class WriterService:
         normalized_mode_type = 2 if int(mode_type) == 2 else 1
 
         if normalized_mode_type == 2:
-            h1_title, outline = self._extract_outline_structure(keyword, info)
+            h1_title, outline = self._extract_outline_structure(keyword)
             if not outline:
                 outline = [
-                    {"level": "H2", "title": f"{keyword} overview"},
+                    {"level": "H2", "title": f"{h1_title} overview"},
                     {"level": "H2", "title": "Key points"},
                 ]
 
@@ -282,14 +284,14 @@ class WriterService:
                     "audience": "readers expecting the provided outline to be expanded clearly",
                     "meta_title": truncate(h1_title, int(rule_context["meta_title_limit"])),
                     "meta_description": truncate(
-                        f"Outline-based SEO article for {keyword} that follows the supplied structure closely.",
+                        f"Outline-based SEO article for {h1_title} that follows the supplied structure closely.",
                         int(rule_context["meta_description_limit"]),
                     ),
                     "h1_options": [h1_title],
                     "outline": outline,
-                    "longtail_keywords": [keyword],
+                    "longtail_keywords": [h1_title],
                     "faq_questions": faq_questions,
-                    "image_briefs": [f"Editorial image for {keyword}"],
+                    "image_briefs": [f"Editorial image for {h1_title}"],
                     "link_opportunities": ["Use official product or support pages where relevant"],
                     "compliance_notes": rule_context.get("required_notes", []),
                     "internal_link_plan": rule_context.get("resolved_internal_links", []),
@@ -300,10 +302,10 @@ class WriterService:
                     "audience": "readers expecting a concise answer that follows the supplied outline",
                     "meta_title": truncate(h1_title, int(rule_context["meta_title_limit"])),
                     "meta_description": truncate(
-                        f"Outline-based GEO article for {keyword} that follows the supplied structure closely.",
+                        f"Outline-based GEO article for {h1_title} that follows the supplied structure closely.",
                         int(rule_context["meta_description_limit"]),
                     ),
-                    "answer_first_summary": f"The short answer to {keyword} should stay consistent with the supplied outline.",
+                    "answer_first_summary": f"The short answer to {h1_title} should stay consistent with the supplied outline.",
                     "entity_summary": brand_line,
                     "h1_options": [h1_title],
                     "outline": outline,
@@ -314,20 +316,20 @@ class WriterService:
                     "compliance_notes": rule_context.get("required_notes", []),
                     "schema_suggestions": ["Article", "FAQPage"],
                     "trust_signals": ["author byline", "publish date", "last updated", "references"],
-                    "image_briefs": [f"Editorial image for {keyword}"],
+                    "image_briefs": [f"Editorial image for {h1_title}"],
                 }
 
             html_parts = [f"<h1>{h1_title}</h1>"]
             if category == "seo":
                 html_parts.append(
-                    f"<p>This draft follows the supplied outline for {keyword} and expands each section without changing the requested structure.</p>"
+                    f"<p>This draft follows the supplied outline for {h1_title} and expands each section without changing the requested structure.</p>"
                 )
                 html_parts.append(
                     f"<p>Use the {internal_link} where it helps the reader, and keep brand context supportive instead of promotional.</p>"
                 )
             else:
                 html_parts.append(
-                    f"<p>The short answer for {keyword} should be stated clearly first, then expanded strictly within the supplied outline.</p>"
+                    f"<p>The short answer for {h1_title} should be stated clearly first, then expanded strictly within the supplied outline.</p>"
                 )
                 html_parts.append(
                     f"<p>Use direct, evidence-aware language and point readers to the {internal_link} when an official reference helps validate the answer.</p>"
@@ -339,14 +341,14 @@ class WriterService:
                 html_parts.append(f"<{tag}>{title}</{tag}>")
                 if category == "seo":
                     html_parts.append(
-                        f"<p>This section expands on {title} while keeping the original outline order and intent intact for {keyword}.</p>"
+                        f"<p>This section expands on {title} while keeping the original outline order and intent intact for {h1_title}.</p>"
                     )
                     html_parts.append(
                         "<p>Add concrete examples, search-intent detail, and brand-specific proof only when they directly support this outline section.</p>"
                     )
                 else:
                     html_parts.append(
-                        f"<p>This section answers {title} in a concise, extractable way and keeps the entity framing consistent with {keyword}.</p>"
+                        f"<p>This section answers {title} in a concise, extractable way and keeps the entity framing consistent with {h1_title}.</p>"
                     )
                     html_parts.append(
                         "<p>Support the key claims here with source types, product facts, or policy references that match this outline section.</p>"
@@ -522,8 +524,8 @@ class WriterService:
             word_limit=word_limit,
         )
 
-    def _extract_outline_structure(self, keyword: str, outline_text: str) -> tuple[str, list[dict[str, str]]]:
-        title = keyword
+    def _extract_outline_structure(self, outline_text: str) -> tuple[str, list[dict[str, str]]]:
+        title = "Outline-based article"
         outline: list[dict[str, str]] = []
 
         for raw_line in outline_text.splitlines():
@@ -551,6 +553,9 @@ class WriterService:
             indent = len(raw_line) - len(raw_line.lstrip())
             outline.append({"level": "H3" if indent >= 2 and outline else "H2", "title": cleaned})
 
+        if title == "Outline-based article" and outline:
+            title = outline[0]["title"]
+
         return title, outline
 
     def _attach_images(
@@ -560,6 +565,7 @@ class WriterService:
         article: dict[str, Any],
         category: str,
         keyword: str,
+        mode_type: int,
         info: str,
         include_cover: int,
         content_image_count: int,
@@ -576,10 +582,11 @@ class WriterService:
             article["image_generation_mode"] = "disabled"
             return article
 
+        image_keyword = str(article.get("title") or keyword) if int(mode_type) == 2 else keyword
         assets = self.image_service.ensure_assets(
             asset_namespace=asset_namespace,
             category=category,
-            keyword=keyword,
+            keyword=image_keyword,
             info=info,
             article=article,
             include_cover=include_cover,

@@ -68,8 +68,6 @@ def test_create_task_and_fetch_result(tmp_path: Path) -> None:
             "content_image_count": 2,
             "task_context": {
                 "country": "de",
-                "market": "eu",
-                "article_type": "policy_incentive",
                 "requires_shopify_link": True,
                 "shopify_url": "https://de.ecoflow.com/products/stream-microinverter",
             },
@@ -90,7 +88,7 @@ def test_create_task_and_fetch_result(tmp_path: Path) -> None:
     assert task_payload["task_context"]["country"] == "de"
     assert task_payload["article"]["generation_mode"] == "mock"
     assert task_payload["article"]["audit"]["score"] > 0
-    assert "added the required disclaimer block" in task_payload["article"]["audit"]["applied_fixes"]
+    assert "added a references and verification section" in task_payload["article"]["audit"]["applied_fixes"]
     assert "https://de.ecoflow.com/products/stream-microinverter" in task_payload["article"]["raw_html"]
     assert len(task_payload["article"]["images"]) == 3
     assert task_payload["article"]["cover_image"] is not None
@@ -364,9 +362,9 @@ def test_mode_type_changes_cache_scope_and_outline_mode_preserves_headings(tmp_p
         headers=bearer,
         json={
             "category": "seo",
-            "keyword": "portable charger on plane",
+            "keyword": "# Portable Charger on Plane\n## Airline rules\n## Battery limits\n### Domestic flights",
             "mode_type": 2,
-            "info": "# Portable Charger on Plane\n## Airline rules\n## Battery limits\n### Domestic flights",
+            "info": "Brand: VoltGo",
             "include_cover": 0,
             "content_image_count": 0,
         },
@@ -386,7 +384,7 @@ def test_mode_type_changes_cache_scope_and_outline_mode_preserves_headings(tmp_p
     assert html.index("<h2>Airline rules</h2>") < html.index("<h2>Battery limits</h2>")
 
 
-def test_create_task_requires_info_in_outline_mode(tmp_path: Path) -> None:
+def test_create_task_accepts_outline_in_keyword_field_for_outline_mode(tmp_path: Path) -> None:
     app = create_app(
         {
             "data_dir": tmp_path,
@@ -406,16 +404,18 @@ def test_create_task_requires_info_in_outline_mode(tmp_path: Path) -> None:
         headers=bearer,
         json={
             "category": "seo",
-            "keyword": "portable charger on plane",
+            "keyword": "## Airline rules\n## Battery limits",
             "mode_type": 2,
             "include_cover": 0,
             "content_image_count": 0,
         },
     )
-    assert response.status_code == 400
-    payload = response.json()
-    assert payload["success"] is False
-    assert payload["message"] == "info is required when mode_type=2"
+    assert response.status_code == 200
+    task_id = response.json()["data"]["task_id"]
+    task_payload = wait_for_task_completion(client, bearer, task_id)
+    assert task_payload["mode_type"] == 2
+    assert "<h2>Airline rules</h2>" in task_payload["article"]["raw_html"]
+    assert "<h2>Battery limits</h2>" in task_payload["article"]["raw_html"]
 
 
 def test_reuse_existing_task_is_scoped_by_access_tier(tmp_path: Path) -> None:
@@ -588,7 +588,6 @@ def test_task_context_changes_cache_scope_and_adds_disclaimer(tmp_path: Path) ->
             "content_image_count": 0,
             "task_context": {
                 "country": "de",
-                "market": "eu",
                 "article_type": "policy_incentive",
                 "requires_shopify_link": True,
                 "shopify_url": "https://de.ecoflow.com/products/stream-microinverter",
@@ -605,8 +604,7 @@ def test_task_context_changes_cache_scope_and_adds_disclaimer(tmp_path: Path) ->
             "include_cover": 0,
             "content_image_count": 0,
             "task_context": {
-                "country": "au",
-                "market": "row",
+                "country": "nl",
                 "article_type": "natural_disaster",
             },
         },
@@ -648,6 +646,7 @@ def test_index_renders_token_and_task_console(tmp_path: Path) -> None:
     assert "Get 1-Day Token" in html
     assert "content_image_count" in html
     assert "mode_type" in html
+    assert "Keyword / Outline" in html
     assert "/api/tasks" in html
     assert "/api/token" in html
     assert "Recent Tasks" in html
