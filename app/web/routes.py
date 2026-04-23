@@ -20,6 +20,7 @@ def create_web_router(services: AppServices) -> APIRouter:
             active_demo="article",
         )
         context["request"] = request
+        context["static_version"] = "20260423-mode-type-v2"
         return services.templates.TemplateResponse(request, "demo/index.html", context)
 
     @router.get("/outline", response_class=HTMLResponse, include_in_schema=False)
@@ -32,6 +33,7 @@ def create_web_router(services: AppServices) -> APIRouter:
             active_demo="outline",
         )
         context["request"] = request
+        context["static_version"] = "20260423-mode-type-v2"
         return services.templates.TemplateResponse(request, "demo/outline.html", context)
 
     @router.get("/favicon.ico", include_in_schema=False)

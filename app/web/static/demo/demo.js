@@ -454,9 +454,6 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       </div>
     `;
-    apiJson.textContent = JSON.stringify({ status: "submitting" }, null, 2);
-    renderSummary();
-
     const formData = new FormData(taskForm);
     const payload = {
       category: formData.get("category"),
@@ -476,6 +473,8 @@ document.addEventListener("DOMContentLoaded", () => {
         shopify_url: formData.get("shopify_url") || "",
       },
     };
+    apiJson.textContent = JSON.stringify({ status: "submitting", payload }, null, 2);
+    renderSummary();
 
     const result = await requestJson("/api/tasks", {
       method: "POST",
