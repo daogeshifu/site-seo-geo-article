@@ -28,6 +28,11 @@ def _outline_summary(task: dict[str, Any]) -> str:
     return compact[:160].rstrip() + ("..." if len(compact) > 160 else "")
 
 
+def _article_url(article: dict[str, Any]) -> str:
+    slug = str(article.get("slug") or "").strip().lstrip("/")
+    return f"/{slug}" if slug else "/article"
+
+
 class _HTMLBlockParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -83,6 +88,7 @@ class DocExportService:
     def _add_meta(self, document: Document, task: dict[str, Any], article: dict[str, Any]) -> None:
         rows = [
             ("Title", str(article.get("title") or "").strip()),
+            ("URL", _article_url(article)),
             ("Outline Summary", _outline_summary(task)),
             ("Meta Title", str(article.get("meta_title") or "").strip()),
             ("Meta Description", str(article.get("meta_description") or "").strip()),
@@ -125,4 +131,3 @@ class DocExportService:
                 run = paragraph.add_run(text)
                 if segment["bold"]:
                     run.bold = True
-

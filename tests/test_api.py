@@ -611,6 +611,7 @@ def test_export_task_docx_returns_formatted_word_file(tmp_path: Path) -> None:
         document_xml = archive.read("word/document.xml").decode("utf-8")
 
     assert "Title:" in document_xml
+    assert "URL:" in document_xml
     assert "Outline Summary:" in document_xml
     assert "Meta Title:" in document_xml
     assert "Meta Description:" in document_xml
