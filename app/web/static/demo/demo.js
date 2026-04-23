@@ -119,6 +119,45 @@ document.addEventListener("DOMContentLoaded", () => {
     return slug ? `/${slug}` : "/article";
   }
 
+  function parseDownloadFilename(response) {
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match?.[1]) {
+      return decodeURIComponent(utf8Match[1]);
+    }
+    const plainMatch = disposition.match(/filename=\"?([^\";]+)\"?/i);
+    return plainMatch?.[1] || "article.docx";
+  }
+
+  async function exportTaskDocx(taskId) {
+    const response = await fetch(`/api/tasks/${taskId}/export.docx`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!response.ok) {
+      let message = "Export failed";
+      try {
+        const payload = await response.json();
+        message = payload?.message || message;
+      } catch {
+      }
+      taskMeta.textContent = message;
+      return;
+    }
+
+    const blob = await response.blob();
+    const filename = parseDownloadFilename(response);
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+    taskMeta.textContent = `Task ${taskId} · DOCX exported`;
+  }
+
   function renderRecentTasks(tasks) {
     if (!accessToken) {
       recentTasks.innerHTML = '<div class="empty">Exchange a bearer token to load the latest task records.</div>';
@@ -329,6 +368,9 @@ document.addEventListener("DOMContentLoaded", () => {
               ${task.access_tier ? `<span class="pill">${escapeHtml(task.access_tier)} access</span>` : ""}
             </div>
           </div>
+          <div>
+            <button class="btn btn-ghost btn-small export-docx-btn" type="button" data-task-id="${task.task_id}">Export DOCX</button>
+          </div>
         </div>
         ${task.error_message ? `<p class="muted" style="color:#b91c1c">${escapeHtml(task.error_message)}</p>` : ""}
         <div class="article-meta">
@@ -355,6 +397,14 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
 
     bindResultTabs();
+    results.querySelectorAll(".export-docx-btn").forEach((button) => {
+      button.addEventListener("click", () => {
+        const taskId = Number(button.dataset.taskId || 0);
+        if (taskId > 0) {
+          exportTaskDocx(taskId);
+        }
+      });
+    });
   }
 
   async function fetchTask(taskId) {

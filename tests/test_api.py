@@ -1,4 +1,6 @@
 import time
+import zipfile
+from io import BytesIO
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -567,6 +569,56 @@ def test_generate_outline_returns_outline_suggestions_and_links(tmp_path: Path) 
     assert data["recommended_internal_links"][0]["url"].startswith("https://www.ankersolix.com/nl")
 
 
+def test_export_task_docx_returns_formatted_word_file(tmp_path: Path) -> None:
+    app = create_app(
+        {
+            "data_dir": tmp_path,
+            "llm_mock_mode": True,
+            "openai_api_key": "",
+            "normal_access_key": "test-standard-key",
+            "vip_access_key": "test-vip-key",
+            "token_signing_secret": "test-signing-secret",
+        }
+    )
+    client = TestClient(app)
+    token_data = issue_token(client)
+    bearer = {"Authorization": f"Bearer {token_data['access_token']}"}
+
+    create_response = client.post(
+        "/api/tasks",
+        headers=bearer,
+        json={
+            "category": "seo",
+            "keyword": "portable charger on plane",
+            "info": "Brand: VoltGo",
+            "include_cover": 0,
+            "content_image_count": 0,
+        },
+    )
+    assert create_response.status_code == 200
+    task_id = create_response.json()["data"]["task_id"]
+    wait_for_task_completion(client, bearer, task_id)
+
+    export_response = client.get(f"/api/tasks/{task_id}/export.docx", headers=bearer)
+    assert export_response.status_code == 200
+    assert (
+        export_response.headers["content-type"]
+        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    assert ".docx" in export_response.headers["content-disposition"]
+
+    with zipfile.ZipFile(BytesIO(export_response.content)) as archive:
+        document_xml = archive.read("word/document.xml").decode("utf-8")
+
+    assert "Title:" in document_xml
+    assert "Outline Summary:" in document_xml
+    assert "Meta Title:" in document_xml
+    assert "Meta Description:" in document_xml
+    assert "portable charger on plane" in document_xml.lower()
+    assert "Heading1" in document_xml
+    assert "Heading2" in document_xml
+
+
 def test_task_context_changes_cache_scope_and_adds_disclaimer(tmp_path: Path) -> None:
     app = create_app(
         {
@@ -698,7 +750,13 @@ def test_openapi_only_exposes_task_endpoints(tmp_path: Path) -> None:
     response = client.get("/openapi.json")
     assert response.status_code == 200
     paths = response.json()["paths"]
-    assert set(paths.keys()) == {"/api/token", "/api/outline", "/api/tasks", "/api/tasks/{task_id}"}
+    assert set(paths.keys()) == {
+        "/api/token",
+        "/api/outline",
+        "/api/tasks",
+        "/api/tasks/{task_id}",
+        "/api/tasks/{task_id}/export.docx",
+    }
 
 
 def test_openapi_exposes_bearer_security_scheme(tmp_path: Path) -> None:

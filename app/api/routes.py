@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.runtime import AppServices
@@ -289,5 +291,55 @@ def create_api_router(services: AppServices) -> APIRouter:
                 },
             )
         return TaskDetailResponse(data=task)
+
+    @router.get(
+        "/tasks/{task_id}/export.docx",
+        tags=["tasks"],
+        response_model=None,
+        responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+        summary="Export a completed task as a DOCX file",
+    )
+    async def export_task_docx(
+        task_id: int,
+        authorization: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    ) -> Response:
+        auth_payload = resolve_auth_payload(services, authorization)
+        if not auth_payload:
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"success": False, "message": "valid bearer token is required"},
+            )
+
+        try:
+            task = services.task_service.get_task(task_id)
+        except Exception:
+            logger.exception("Task service unavailable while exporting task_id=%s.", task_id)
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"success": False, "message": "task service is temporarily unavailable"},
+            )
+
+        if not task:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"success": False, "message": "task not found"},
+            )
+
+        if task.get("status") != "completed" or not task.get("article"):
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"success": False, "message": "task is not ready for export"},
+            )
+
+        binary, filename = services.doc_export_service.build_docx(task)
+        quoted_filename = quote(filename)
+        headers = {
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_filename}",
+        }
+        return Response(
+            content=binary,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers=headers,
+        )
 
     return router

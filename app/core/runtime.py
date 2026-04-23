@@ -10,6 +10,7 @@ from app.core.config import Settings
 from app.services.article_validator import ArticleValidator
 from app.services.auth_service import AuthService
 from app.services.cache_service import CacheService
+from app.services.doc_export_service import DocExportService
 from app.services.image_service import ImageService
 from app.services.llm_client import LLMClient
 from app.services.outline_service import OutlineService
@@ -25,6 +26,7 @@ class AppServices:
     settings: Settings
     auth_service: AuthService
     cache_service: CacheService
+    doc_export_service: DocExportService
     image_service: ImageService
     outline_service: OutlineService
     writer_service: WriterService
@@ -43,6 +45,7 @@ def build_services(config_override: dict[str, Any] | None = None) -> AppServices
         settings.image_dir = settings.data_dir / "images"
 
     cache_service = CacheService(settings.cache_dir)
+    doc_export_service = DocExportService()
     auth_service = AuthService(settings)
     llm_client = LLMClient(settings)
     oss_service = AliyunOSSService(settings)
@@ -67,6 +70,7 @@ def build_services(config_override: dict[str, Any] | None = None) -> AppServices
         settings=settings,
         auth_service=auth_service,
         cache_service=cache_service,
+        doc_export_service=doc_export_service,
         image_service=image_service,
         outline_service=outline_service,
         writer_service=writer_service,
