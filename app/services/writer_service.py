@@ -13,7 +13,7 @@ from app.services.prompt_builder import (
     build_strategy_prompt,
 )
 from app.services.rulebook_service import RulebookService
-from app.utils.common import extract_json_object, slugify, truncate
+from app.utils.common import extract_json_object, seo_slugify, slugify, truncate
 
 
 class WriterService:
@@ -232,7 +232,7 @@ class WriterService:
                 or f"{keyword} article for {info or 'your brand'}",
                 int(rule_context.get("meta_description_limit", 160)),
             ),
-            "slug": slugify(title),
+            "slug": seo_slugify(title),
             "raw_html": html,
             "html": html,
             "strategy": strategy,

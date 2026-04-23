@@ -114,6 +114,11 @@ document.addEventListener("DOMContentLoaded", () => {
     return compact;
   }
 
+  function previewArticleUrl(article) {
+    const slug = String(article?.slug || "").trim().replace(/^\/+/, "");
+    return slug ? `/${slug}` : "/article";
+  }
+
   function renderRecentTasks(tasks) {
     if (!accessToken) {
       recentTasks.innerHTML = '<div class="empty">Exchange a bearer token to load the latest task records.</div>';
@@ -328,6 +333,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ${task.error_message ? `<p class="muted" style="color:#b91c1c">${escapeHtml(task.error_message)}</p>` : ""}
         <div class="article-meta">
           <div><strong>Title:</strong> ${escapeHtml(article.title)}</div>
+          <div><strong>URL:</strong> ${escapeHtml(previewArticleUrl(article))}</div>
           <div><strong>${task.mode_type === 2 ? "Outline Summary" : "Keyword"}:</strong> ${escapeHtml(summarizeTaskKeyword(task))}</div>
           <div><strong>Meta Title:</strong> ${escapeHtml(article.meta_title)}</div>
           <div><strong>Meta Description:</strong> ${escapeHtml(article.meta_description)}</div>

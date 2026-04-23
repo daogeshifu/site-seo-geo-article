@@ -42,6 +42,31 @@ def slugify(value: str) -> str:
     return value.strip("-") or "article"
 
 
+def seo_slugify(value: str, max_length: int = 75, max_segments: int = 10) -> str:
+    slug = slugify(value)
+    if not slug:
+        return "article"
+
+    parts = [part for part in slug.split("-") if part][: max(1, int(max_segments))]
+    candidate = "-".join(parts).strip("-") or "article"
+    if len(candidate) <= max_length:
+        return candidate
+
+    trimmed_parts: list[str] = []
+    current_length = 0
+    for part in parts:
+        extra = len(part) if not trimmed_parts else len(part) + 1
+        if current_length + extra > max_length:
+            break
+        trimmed_parts.append(part)
+        current_length += extra
+
+    if trimmed_parts:
+        return "-".join(trimmed_parts).strip("-") or "article"
+
+    return candidate[:max_length].rstrip("-") or "article"
+
+
 def truncate(value: str, limit: int) -> str:
     value = value.strip()
     if len(value) <= limit:

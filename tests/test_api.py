@@ -88,6 +88,9 @@ def test_create_task_and_fetch_result(tmp_path: Path) -> None:
     assert task_payload["word_limit"] == 1200
     assert task_payload["task_context"]["country"] == "de"
     assert task_payload["article"]["generation_mode"] == "mock"
+    assert task_payload["article"]["slug"] == task_payload["article"]["slug"].lower()
+    assert " " not in task_payload["article"]["slug"]
+    assert len(task_payload["article"]["slug"]) <= 75
     assert task_payload["article"]["audit"]["score"] > 0
     assert "added a references and verification section" in task_payload["article"]["audit"]["applied_fixes"]
     assert "https://de.ecoflow.com/products/stream-microinverter" in task_payload["article"]["raw_html"]
