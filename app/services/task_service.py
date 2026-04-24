@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from app.services.cache_service import CacheService
+from app.services.task_modes import ARTICLE_MODE_TYPES, normalize_mode_type
 from app.services.task_repository import TaskRepository
 from app.services.writer_service import WriterService
 from app.utils.common import normalize_text, utcnow_iso
@@ -44,7 +45,7 @@ class TaskService:
     ) -> dict[str, Any]:
         normalized_category = normalize_text(category)
         normalized_keyword = keyword.strip()
-        normalized_mode_type = 2 if int(mode_type) == 2 else 1
+        normalized_mode_type = normalize_mode_type(mode_type)
         normalized_language = (language or "English").strip() or "English"
         normalized_info = info or ""
         normalized_task_context = task_context or {}
@@ -54,6 +55,8 @@ class TaskService:
 
         if not normalized_keyword:
             raise ValueError("A keyword is required.")
+        if normalized_mode_type not in ARTICLE_MODE_TYPES:
+            raise ValueError("Article tasks only support mode_type 1 or 2.")
 
         if not force_refresh:
             reusable_task = self.task_repository.find_reusable_task(
@@ -120,7 +123,7 @@ class TaskService:
         return payload
 
     def list_tasks(self, limit: int = 10) -> list[dict[str, Any]]:
-        tasks = self.task_repository.list_tasks(max(1, min(50, int(limit))))
+        tasks = self.task_repository.list_tasks(max(1, min(50, int(limit))), mode_types=sorted(ARTICLE_MODE_TYPES))
         return [self._build_task_summary(task) for task in tasks]
 
     def _run_task(self, task_id: int) -> None:

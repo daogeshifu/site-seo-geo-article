@@ -3,39 +3,49 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.llm_client import LLMClient
-from app.utils.common import extract_json_object, split_keywords
+from app.services.rulebook_service import RulebookService
+from app.utils.common import extract_json_object
 
 
 class OutlineService:
-    def __init__(self, llm_client: LLMClient) -> None:
+    def __init__(self, llm_client: LLMClient, rulebook_service: RulebookService | None = None) -> None:
         self.llm_client = llm_client
+        self.rulebook_service = rulebook_service or RulebookService()
 
     def generate(
         self,
         *,
         category: str,
         keyword: str,
-        site_url: str,
-        product_urls: list[str],
+        info: str,
+        task_context: dict[str, Any] | None = None,
+        language: str = "English",
         provider: str = "openai",
         access_tier: str = "standard",
     ) -> dict[str, Any]:
         normalized_category = (category or "seo").strip().lower()
         normalized_keyword = keyword.strip()
-        normalized_site_url = site_url.strip()
-        normalized_product_urls = [item.strip() for item in product_urls if item.strip()]
+        normalized_info = (info or "").strip()
+        normalized_language = (language or "English").strip() or "English"
+        normalized_task_context = self.rulebook_service.normalize_task_context(task_context)
+        rule_context = self.rulebook_service.resolve_rules(
+            category=normalized_category,
+            language=normalized_language,
+            task_context=normalized_task_context,
+        )
+        available_links = self._available_links(rule_context)
 
         if not normalized_keyword:
             raise ValueError("keyword is required")
-        if not normalized_site_url:
-            raise ValueError("site_url is required")
 
         if self.llm_client.enabled(provider):
             prompt = self._build_prompt(
                 category=normalized_category,
                 keyword=normalized_keyword,
-                site_url=normalized_site_url,
-                product_urls=normalized_product_urls,
+                info=normalized_info,
+                language=normalized_language,
+                rule_context=rule_context,
+                available_links=available_links,
             )
             raw = self.llm_client.complete(
                 prompt,
@@ -48,16 +58,20 @@ class OutlineService:
                 payload,
                 category=normalized_category,
                 keyword=normalized_keyword,
-                site_url=normalized_site_url,
-                product_urls=normalized_product_urls,
+                info=normalized_info,
+                language=normalized_language,
+                task_context=normalized_task_context,
+                available_links=available_links,
                 generation_mode="llm",
             )
 
         return self._mock_payload(
             category=normalized_category,
             keyword=normalized_keyword,
-            site_url=normalized_site_url,
-            product_urls=normalized_product_urls,
+            info=normalized_info,
+            language=normalized_language,
+            task_context=normalized_task_context,
+            available_links=available_links,
         )
 
     def _build_prompt(
@@ -65,14 +79,29 @@ class OutlineService:
         *,
         category: str,
         keyword: str,
-        site_url: str,
-        product_urls: list[str],
+        info: str,
+        language: str,
+        rule_context: dict[str, Any],
+        available_links: list[dict[str, str]],
     ) -> str:
         mode_name = "GEO" if category == "geo" else "SEO"
-        language_hint = (
-            "Write in the same language as the keyword unless the keyword language is unclear."
+        context = rule_context.get("context") or {}
+        link_lines = (
+            "\n".join(f"- {item['label']}: {item['url']}" for item in available_links)
+            or "- No official internal links provided"
         )
-        product_url_lines = "\n".join(f"- {item}" for item in product_urls) or "- None provided"
+        market_notes = [
+            f"Country: {context.get('country') or 'not specified'}",
+            f"Market: {context.get('market') or 'not specified'}",
+            f"Locale: {rule_context.get('locale_variant') or language}",
+            f"AI Q&A reference answer: {context.get('ai_qa_content') or 'not provided'}",
+            f"AI Q&A adopted source links: {context.get('ai_qa_source') or 'not provided'}",
+            (
+                f"Shopify URL required: {rule_context.get('shopify_url')}"
+                if rule_context.get("requires_shopify_link") and rule_context.get("shopify_url")
+                else "Shopify URL requirement: no"
+            ),
+        ]
         mode_requirements = (
             "- Optimize for answer-first extraction, AI readability, clear entities, FAQ, citations, and trust signals.\n"
             "- Make the outline directly usable for a GEO article.\n"
@@ -84,6 +113,7 @@ class OutlineService:
             "- Make the outline directly usable for an SEO article.\n"
             "- Include a strong intro, clear section hierarchy, conclusion, and FAQ."
         )
+        info_block = info or "No extra business context provided."
         return f"""
 You are a senior {mode_name} content strategist.
 Create a clean article outline plan for the keyword below.
@@ -91,18 +121,26 @@ Create a clean article outline plan for the keyword below.
 Keyword:
 {keyword}
 
-Official website:
-{site_url}
+Business context:
+{info_block}
 
-Product URLs:
-{product_url_lines}
+Language:
+{language}
+
+Task context:
+{chr(10).join(f"- {item}" for item in market_notes)}
+
+Allowed internal links:
+{link_lines}
 
 Requirements:
 {mode_requirements}
-- {language_hint}
-- Do not invent product URLs or internal links. Only recommend the provided site URL and provided product URLs.
-- The output should be ready for a content writer to use immediately.
 - Keep the outline practical, specific, and commercially relevant without sounding like an ad.
+- Use the business context and country rules when deciding comparison criteria and examples.
+- Use AI Q&A reference answer and adopted source links as GEO research input when provided.
+- Only recommend internal links from the allowed list above.
+- If a Shopify URL is required, place it naturally in the early buying-intent section.
+- Return an outline a writer can use immediately.
 
 Return strict JSON only:
 {{
@@ -125,8 +163,10 @@ Return strict JSON only:
         *,
         category: str,
         keyword: str,
-        site_url: str,
-        product_urls: list[str],
+        info: str,
+        language: str,
+        task_context: dict[str, Any],
+        available_links: list[dict[str, str]],
         generation_mode: str,
     ) -> dict[str, Any]:
         writing_suggestions = [
@@ -135,37 +175,37 @@ Return strict JSON only:
             if str(item).strip()
         ]
         if not writing_suggestions:
-            writing_suggestions = self._default_writing_suggestions(category, keyword)
+            writing_suggestions = self._default_writing_suggestions(category, keyword, info, task_context)
 
+        allowed_urls = {item["url"] for item in available_links if item.get("url")}
         recommended_internal_links = []
         for item in payload.get("recommended_internal_links") or []:
             url = str(item.get("url") or "").strip()
             label = str(item.get("label") or "").strip()
             reason = str(item.get("reason") or "").strip()
-            if not url:
-                continue
-            if url != site_url and url not in product_urls:
+            if not url or url not in allowed_urls:
                 continue
             recommended_internal_links.append(
                 {
-                    "label": label or url,
+                    "label": label or self._label_for_url(url, available_links),
                     "url": url,
-                    "reason": reason or "Recommended because it matches the official site or supplied product page.",
+                    "reason": reason or "Recommended because it matches the allowed internal link set.",
                 }
             )
 
         if not recommended_internal_links:
-            recommended_internal_links = self._default_internal_links(site_url, product_urls)
+            recommended_internal_links = self._default_internal_links(available_links)
 
         outline_markdown = str(payload.get("outline_markdown") or "").strip()
         if not outline_markdown:
-            outline_markdown = self._default_outline(category, keyword, product_urls)
+            outline_markdown = self._default_outline(category, keyword, available_links)
 
         return {
             "category": category,
             "keyword": keyword,
-            "site_url": site_url,
-            "product_urls": product_urls,
+            "info": info,
+            "language": language,
+            "task_context": task_context,
             "title": str(payload.get("title") or keyword).strip() or keyword,
             "outline_markdown": outline_markdown,
             "writing_suggestions": writing_suggestions,
@@ -178,28 +218,32 @@ Return strict JSON only:
         *,
         category: str,
         keyword: str,
-        site_url: str,
-        product_urls: list[str],
+        info: str,
+        language: str,
+        task_context: dict[str, Any],
+        available_links: list[dict[str, str]],
     ) -> dict[str, Any]:
         return {
             "category": category,
             "keyword": keyword,
-            "site_url": site_url,
-            "product_urls": product_urls,
+            "info": info,
+            "language": language,
+            "task_context": task_context,
             "title": keyword,
-            "outline_markdown": self._default_outline(category, keyword, product_urls),
-            "writing_suggestions": self._default_writing_suggestions(category, keyword),
-            "recommended_internal_links": self._default_internal_links(site_url, product_urls),
+            "outline_markdown": self._default_outline(category, keyword, available_links),
+            "writing_suggestions": self._default_writing_suggestions(category, keyword, info, task_context),
+            "recommended_internal_links": self._default_internal_links(available_links),
             "generation_mode": "mock",
         }
 
-    def _default_outline(self, category: str, keyword: str, product_urls: list[str]) -> str:
+    def _default_outline(self, category: str, keyword: str, available_links: list[dict[str, str]]) -> str:
         answer_label = "Quick Answer" if category == "geo" else "Intro"
         source_label = "Bronnen en verificatie" if category == "geo" else "Aanbevolen interne links"
+        first_link = next((item["url"] for item in available_links if item.get("url")), "")
         product_line = (
-            f"- Link vroeg in het artikel naar: {product_urls[0]}"
-            if product_urls
-            else "- Voeg vroeg in het artikel een relevante productlink toe."
+            f"- Link vroeg in het artikel naar: {first_link}"
+            if first_link
+            else "- Voeg vroeg in het artikel een relevante interne productlink toe."
         )
         return f"""# {keyword}
 
@@ -218,7 +262,7 @@ Return strict JSON only:
 
 ## Welke oplossing past het best bij welke situatie?
 - Verdeel dit in duidelijke subsecties per gebruikssituatie.
-- Koppel waar relevant naar het officiële product.
+- Koppel waar relevant naar een officiële interne pagina.
 
 ## Aandachtspunten vóór je kiest
 - Benoem grenzen, randvoorwaarden of compatibiliteit.
@@ -234,16 +278,27 @@ Return strict JSON only:
 ### Veelgestelde vraag 3
 
 ## {source_label}
-- Gebruik alleen officiële website- en productlinks.
+- Gebruik alleen officiële of vooraf opgegeven interne links.
 - Noem alleen verifieerbare claims en specificaties.
 """.strip()
 
-    def _default_writing_suggestions(self, category: str, keyword: str) -> list[str]:
+    def _default_writing_suggestions(
+        self,
+        category: str,
+        keyword: str,
+        info: str,
+        task_context: dict[str, Any],
+    ) -> list[str]:
+        country = str(task_context.get("country") or "").upper()
         suggestions = [
             f"Open met een direct antwoord op '{keyword}' in de eerste 100-150 woorden.",
             "Gebruik korte, scanbare H2-secties en vermijd generieke tussenkoppen.",
             "Werk met concrete criteria, zodat de lezer en AI-systemen het antwoord makkelijk kunnen samenvatten.",
         ]
+        if info:
+            suggestions.append("Verwerk merk-, product- of businesscontext alleen waar die het besluit van de lezer echt ondersteunt.")
+        if country:
+            suggestions.append(f"Houd voorbeelden, termen en nuance consistent met de marktcontext voor {country}.")
         if category == "geo":
             suggestions.extend(
                 [
@@ -258,16 +313,37 @@ Return strict JSON only:
                     "Plaats het belangrijkste interne productlink vroeg in het artikel voor een sterkere SEO-structuur.",
                 ]
             )
-        return suggestions
+        return suggestions[:5]
 
-    def _default_internal_links(self, site_url: str, product_urls: list[str]) -> list[dict[str, str]]:
-        links = [{"label": "Officiële website", "url": site_url, "reason": "Gebruik als merk- of categorieverwijzing."}]
-        for index, url in enumerate(split_keywords(product_urls), start=1):
+    def _default_internal_links(self, available_links: list[dict[str, str]]) -> list[dict[str, str]]:
+        if not available_links:
+            return []
+        links: list[dict[str, str]] = []
+        for index, item in enumerate(available_links, start=1):
             links.append(
                 {
-                    "label": f"Productpagina {index}",
-                    "url": url,
+                    "label": item.get("label") or f"Internal link {index}",
+                    "url": item.get("url") or "",
                     "reason": "Gebruik als vroege productlink of ondersteunende interne verwijzing.",
                 }
             )
+        return [item for item in links if item["url"]]
+
+    def _available_links(self, rule_context: dict[str, Any]) -> list[dict[str, str]]:
+        links: list[dict[str, str]] = []
+        shopify_url = str(rule_context.get("shopify_url") or "").strip()
+        if shopify_url:
+            links.append({"label": "Shopify product page", "url": shopify_url})
+        for item in rule_context.get("resolved_internal_links") or []:
+            label = str(item.get("label") or "").strip()
+            url = str(item.get("url") or "").strip()
+            if label and url and not any(existing["url"] == url for existing in links):
+                links.append({"label": label, "url": url})
         return links
+
+    @staticmethod
+    def _label_for_url(url: str, available_links: list[dict[str, str]]) -> str:
+        for item in available_links:
+            if item.get("url") == url:
+                return item.get("label") or url
+        return url

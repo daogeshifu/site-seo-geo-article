@@ -1,4 +1,7 @@
-from app.services.prompt_builder import build_draft_prompt, build_polish_prompt
+from app.core.config import Settings
+from app.services.llm_client import LLMClient
+from app.services.outline_service import OutlineService
+from app.services.prompt_builder import build_draft_prompt, build_polish_prompt, build_strategy_prompt
 
 
 def test_build_draft_prompt_includes_word_limit() -> None:
@@ -35,3 +38,56 @@ def test_build_draft_prompt_in_outline_mode_requires_strict_structure() -> None:
     assert "Follow the provided outline strictly" in prompt
     assert "Outline from keyword field" in prompt
     assert "Brand/Product info: Brand: VoltGo" in prompt
+
+
+def test_geo_prompts_include_ai_qa_reference_fields() -> None:
+    rule_context = {
+        "context": {
+            "ai_qa_content": "AI says compact home batteries are compared by app clarity and backup modes.",
+            "ai_qa_source": "https://example.com/ai-cited-source",
+        }
+    }
+
+    strategy_prompt = build_strategy_prompt(
+        "geo",
+        "best home battery app",
+        "Brand: VoltGo",
+        "English",
+        rule_context,
+    )
+    draft_prompt = build_draft_prompt(
+        "geo",
+        "best home battery app",
+        "Brand: VoltGo",
+        "English",
+        {"h1_options": ["Best Home Battery App"]},
+        rule_context,
+    )
+
+    assert "AI Q&A reference answer" in strategy_prompt
+    assert "https://example.com/ai-cited-source" in strategy_prompt
+    assert "AI Q&A reference answer" in draft_prompt
+    assert "https://example.com/ai-cited-source" in draft_prompt
+
+
+def test_outline_prompt_includes_ai_qa_reference_fields() -> None:
+    service = OutlineService(LLMClient(Settings(llm_mock_mode=True)))
+    prompt = service._build_prompt(
+        category="geo",
+        keyword="best home battery app",
+        info="Brand: VoltGo",
+        language="English",
+        rule_context={
+            "context": {
+                "country": "nl",
+                "ai_qa_content": "AI answer mentions app clarity and energy-flow visibility.",
+                "ai_qa_source": "https://example.com/ai-source",
+            },
+            "locale_variant": "Dutch / Netherlands",
+        },
+        available_links=[],
+    )
+
+    assert "AI Q&A reference answer" in prompt
+    assert "energy-flow visibility" in prompt
+    assert "https://example.com/ai-source" in prompt

@@ -46,6 +46,8 @@ class RulebookService:
             "mentions_other_brands": bool(context.get("mentions_other_brands", False)),
             "requires_shopify_link": bool(context.get("requires_shopify_link", False)),
             "shopify_url": str(context.get("shopify_url") or "").strip(),
+            "ai_qa_content": str(context.get("ai_qa_content") or "").strip(),
+            "ai_qa_source": str(context.get("ai_qa_source") or "").strip(),
             "internal_links": [
                 {
                     "label": str(item.get("label") or "").strip(),

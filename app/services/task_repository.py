@@ -11,6 +11,7 @@ from threading import Lock
 from typing import Any, Callable, Protocol
 
 from app.core.config import Settings
+from app.services.task_modes import normalize_mode_type
 from app.utils.common import canonical_json
 
 try:
@@ -32,7 +33,7 @@ class TaskRepository(Protocol):
 
     def get_task(self, task_id: int) -> dict[str, Any] | None: ...
 
-    def list_tasks(self, limit: int = 10) -> list[dict[str, Any]]: ...
+    def list_tasks(self, limit: int = 10, mode_types: list[int] | None = None) -> list[dict[str, Any]]: ...
 
     def find_reusable_task(
         self,
@@ -98,11 +99,14 @@ class MemoryTaskRepository:
             task = self._tasks.get(int(task_id))
             return deepcopy(task) if task else None
 
-    def list_tasks(self, limit: int = 10) -> list[dict[str, Any]]:
+    def list_tasks(self, limit: int = 10, mode_types: list[int] | None = None) -> list[dict[str, Any]]:
         with self._lock:
+            allowed_mode_types = {normalize_mode_type(item) for item in mode_types or []}
             items = sorted(self._tasks.values(), key=lambda item: int(item.get("task_id", 0)), reverse=True)
             rows: list[dict[str, Any]] = []
-            for task in items[: max(1, int(limit))]:
+            for task in items:
+                if allowed_mode_types and normalize_mode_type(task.get("mode_type")) not in allowed_mode_types:
+                    continue
                 row = deepcopy(task)
                 result = self._results.get(int(task.get("task_id", 0)))
                 if result:
@@ -115,6 +119,8 @@ class MemoryTaskRepository:
                 else:
                     row["has_result"] = False
                 rows.append(row)
+                if len(rows) >= max(1, int(limit)):
+                    break
             return rows
 
     def find_reusable_task(
@@ -265,9 +271,17 @@ class MySQLTaskRepository:
         row = self._run_with_retry(_operation)
         return _serialize_task_row(row) if row else None
 
-    def list_tasks(self, limit: int = 10) -> list[dict[str, Any]]:
+    def list_tasks(self, limit: int = 10, mode_types: list[int] | None = None) -> list[dict[str, Any]]:
         def _operation(connection: Any) -> list[dict[str, Any]]:
             with connection.cursor() as cursor:
+                allowed_mode_types = [normalize_mode_type(item) for item in mode_types or []]
+                where_clause = ""
+                values: list[Any] = []
+                if allowed_mode_types:
+                    placeholders = ", ".join(["%s"] * len(allowed_mode_types))
+                    where_clause = f"WHERE t.mode_type IN ({placeholders})"
+                    values.extend(allowed_mode_types)
+                values.append(max(1, int(limit)))
                 cursor.execute(
                     f"""
                     SELECT
@@ -279,10 +293,11 @@ class MySQLTaskRepository:
                         r.image_generation_mode
                     FROM {TASK_TABLE} AS t
                     LEFT JOIN {RESULT_TABLE} AS r ON r.task_id = t.id
+                    {where_clause}
                     ORDER BY t.id DESC
                     LIMIT %s
                     """,
-                    (max(1, int(limit)),),
+                    values,
                 )
                 return cursor.fetchall() or []
 
@@ -668,7 +683,7 @@ class MySQLTaskRepository:
                         f"""
                         ALTER TABLE {TASK_TABLE}
                         ADD COLUMN mode_type TINYINT UNSIGNED NOT NULL DEFAULT 1
-                        COMMENT '1 keyword mode, 2 outline mode'
+                        COMMENT '1 keyword article, 2 outline article, 3 outline planner'
                         AFTER keyword
                         """
                     )
@@ -687,7 +702,7 @@ class MySQLTaskRepository:
                         f"""
                         ALTER TABLE {TASK_TABLE}
                         MODIFY COLUMN keyword TEXT NOT NULL
-                        COMMENT 'Keyword for mode 1, outline content for mode 2'
+                        COMMENT 'Keyword or outline source text depending on mode_type'
                         """
                     )
 
@@ -710,7 +725,7 @@ def _serialize_task_row(row: dict[str, Any]) -> dict[str, Any]:
         "task_id": _as_int(row.get("id"), 0),
         "category": str(row.get("category") or ""),
         "keyword": str(row.get("keyword") or ""),
-        "mode_type": 2 if _as_int(row.get("mode_type"), 1) == 2 else 1,
+        "mode_type": normalize_mode_type(_as_int(row.get("mode_type"), 1)),
         "info": str(row.get("info") or ""),
         "task_context": _parse_task_context(row.get("task_context_json")),
         "language": str(row.get("language") or "English"),

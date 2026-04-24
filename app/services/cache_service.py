@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from app.services.task_modes import normalize_mode_type
 from app.utils.common import canonical_json, ensure_dir, load_json, normalize_text
 
 
@@ -13,7 +14,7 @@ def _coerce_mode_and_context(
 ) -> tuple[int, dict[str, Any] | None]:
     if isinstance(mode_type, dict):
         return 1, mode_type if task_context is None else task_context
-    return (2 if int(mode_type) == 2 else 1), task_context
+    return normalize_mode_type(mode_type), task_context
 
 
 class CacheService:

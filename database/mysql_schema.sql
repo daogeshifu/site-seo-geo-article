@@ -11,8 +11,8 @@ USE `site-seo-geo-article`;
 CREATE TABLE IF NOT EXISTS `article_tasks` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'Task ID returned by the API',
   `category` VARCHAR(16) NOT NULL COMMENT 'Article mode: seo or geo',
-  `keyword` TEXT NOT NULL COMMENT 'Keyword for mode 1, outline content for mode 2',
-  `mode_type` TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '1 keyword mode, 2 outline mode',
+  `keyword` TEXT NOT NULL COMMENT 'Keyword or outline source text depending on mode_type',
+  `mode_type` TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '1 keyword article, 2 outline article, 3 outline planner',
   `info` TEXT NOT NULL COMMENT 'Brand / product / business context',
   `task_context_json` LONGTEXT NOT NULL COMMENT 'Normalized task context as JSON',
   `language` VARCHAR(32) NOT NULL DEFAULT 'English' COMMENT 'Requested article language',

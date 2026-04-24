@@ -30,23 +30,24 @@
       <section class="hero">
         <div class="hero-grid">
           <div>
-            <div class="eyebrow">Outline Planning • Bearer Token • Sync Output</div>
-            <h1>Create SEO or GEO outlines from a keyword and official URLs</h1>
+            <div class="eyebrow">Outline Planning • Bearer Token • Async Task</div>
+            <h1>Create SEO or GEO outlines from a keyword and task context</h1>
             <p>
-              This console generates a ready-to-use article outline plus writing suggestions and recommended internal links.
-              Keep the article demo for full drafting, and use this page when you only need the planning layer.
+              This console queues an outline task, polls the result, and returns a ready-to-use article outline plus
+              writing suggestions and recommended internal links.
             </p>
             <div class="hero-badges">
               <span class="badge {{ llm_badge_class }}">{{ llm_label }}</span>
               <span class="badge badge-neutral">POST /api/outline</span>
+              <span class="badge badge-neutral">GET /api/outline/{outline_id}</span>
               <span class="badge badge-neutral">Token-protected</span>
-              <span class="badge badge-neutral">Copy-ready outline</span>
+              <span class="badge badge-neutral">Async polling</span>
             </div>
           </div>
           <aside class="hero-note">
             <h2>Console Notes</h2>
             <ul>
-              <li>Use the official site URL plus one or more product URLs to ground internal link recommendations.</li>
+              <li>Use `info`, `country`, and optional Shopify context to ground the outline and link suggestions.</li>
               <li>SEO mode emphasizes search intent and hierarchy. GEO mode emphasizes answer-first structure and extractability.</li>
               <li>{{ llm_tip }}</li>
             </ul>
@@ -92,8 +93,8 @@
         <article class="card">
           <div class="card-header">
             <div class="card-title">
-              <strong>2. Generate Outline</strong>
-              <span>Select the mode and provide the official URLs you want the outline to use.</span>
+              <strong>2. Create Outline Task</strong>
+              <span>Match the article task style with keyword, info, language, and task context.</span>
             </div>
             <span class="pill">Outline Planner</span>
           </div>
@@ -104,6 +105,26 @@
                 <select name="category" required>
                   <option value="seo">SEO</option>
                   <option value="geo">GEO</option>
+                </select>
+              </label>
+              <label>
+                Language
+                <select name="language" id="language-select" required>
+                  <option value="English">English</option>
+                  <option value="Chinese">Chinese</option>
+                  <option value="French">French</option>
+                  <option value="German">German</option>
+                  <option value="Dutch">Dutch</option>
+                </select>
+              </label>
+              <label>
+                Country
+                <select name="country" id="country-select" required>
+                  <option value="us">United States</option>
+                  <option value="cn">China</option>
+                  <option value="fr">France</option>
+                  <option value="de">Germany</option>
+                  <option value="nl">Netherlands</option>
                 </select>
               </label>
               <label>
@@ -118,22 +139,37 @@
                 <input type="text" name="keyword" required placeholder="Welke thuisbatterij heeft de beste app" />
               </label>
               <label class="full">
-                Official Site URL
-                <input type="url" name="site_url" required placeholder="https://www.ankersolix.com/nl" />
-              </label>
-              <label class="full">
-                Product URLs
+                Info
                 <textarea
-                  name="product_urls"
-                  rows="5"
-                  placeholder="One URL per line&#10;https://www.ankersolix.com/nl/plug-and-play-thuisbatterij/thuisbatterij-a17e2?ref=naviMenu_4_copy&#10;https://www.ankersolix.com/nl/products/a17c5"
+                  name="info"
+                  rows="4"
+                  placeholder="Brand: Anker SOLIX&#10;Product focus: home battery app experience&#10;Audience: Dutch homeowners comparing monitoring UX and installation flexibility"
                 ></textarea>
               </label>
+              <label>
+                Requires Shopify Link
+                <select name="requires_shopify_link">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+              <label>
+                Shopify URL
+                <input type="url" name="shopify_url" placeholder="https://www.ankersolix.com/nl/products/a17c5" />
+              </label>
+              <label class="full">
+                AI Q&A Content
+                <textarea name="ai_qa_content" rows="4" placeholder="Paste the answer returned by an AI assistant for this keyword. Optional, mainly useful for GEO mode."></textarea>
+              </label>
+              <label class="full">
+                AI Q&A Source Links
+                <textarea name="ai_qa_source" rows="3" placeholder="Paste source URLs adopted by the AI answer, one per line if there are multiple. Optional."></textarea>
+              </label>
               <div class="token-note">
-                Add one or more official product URLs to improve internal link recommendations. The output returns a copy-ready outline, writing suggestions, and recommended internal links.
+                This page submits an async outline task, then polls by `outline_id`. `task_context` aligns with the article demo through `country`, `requires_shopify_link`, `shopify_url`, `ai_qa_content`, and `ai_qa_source`.
               </div>
               <div class="actions">
-                <button class="btn btn-primary" type="submit" id="outline-btn">Generate Outline</button>
+                <button class="btn btn-primary" type="submit" id="outline-btn">Start Outline Task</button>
                 <button class="btn btn-ghost" type="button" id="copy-outline-btn">Copy Outline</button>
                 <button class="btn btn-ghost" type="button" id="clear-outline-btn">Clear Panel</button>
               </div>
@@ -145,7 +181,7 @@
           <div class="card-header">
             <div class="card-title">
               <strong>3. Outline Result</strong>
-              <span>The outline is returned instantly and can be copied as-is.</span>
+              <span>The demo polls until the outline task completes, then renders the final planning output.</span>
             </div>
             <span id="outline-meta" class="pill">No outline yet</span>
           </div>

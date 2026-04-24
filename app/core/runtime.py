@@ -14,6 +14,7 @@ from app.services.doc_export_service import DocExportService
 from app.services.image_service import ImageService
 from app.services.llm_client import LLMClient
 from app.services.outline_service import OutlineService
+from app.services.outline_task_service import OutlineTaskService
 from app.services.oss_service import AliyunOSSService
 from app.services.rulebook_service import RulebookService
 from app.services.task_repository import TaskRepository, build_task_repository
@@ -29,6 +30,7 @@ class AppServices:
     doc_export_service: DocExportService
     image_service: ImageService
     outline_service: OutlineService
+    outline_task_service: OutlineTaskService
     writer_service: WriterService
     task_repository: TaskRepository
     task_service: TaskService
@@ -51,7 +53,7 @@ def build_services(config_override: dict[str, Any] | None = None) -> AppServices
     oss_service = AliyunOSSService(settings)
     image_service = ImageService(settings, oss_service=oss_service)
     rulebook_service = RulebookService()
-    outline_service = OutlineService(llm_client)
+    outline_service = OutlineService(llm_client, rulebook_service=rulebook_service)
     writer_service = WriterService(
         llm_client,
         image_service=image_service,
@@ -65,6 +67,11 @@ def build_services(config_override: dict[str, Any] | None = None) -> AppServices
         task_repository=task_repository,
         max_workers=settings.max_workers,
     )
+    outline_task_service = OutlineTaskService(
+        outline_service=outline_service,
+        task_repository=task_repository,
+        max_workers=settings.max_workers,
+    )
 
     return AppServices(
         settings=settings,
@@ -73,6 +80,7 @@ def build_services(config_override: dict[str, Any] | None = None) -> AppServices
         doc_export_service=doc_export_service,
         image_service=image_service,
         outline_service=outline_service,
+        outline_task_service=outline_task_service,
         writer_service=writer_service,
         task_repository=task_repository,
         task_service=task_service,

@@ -42,6 +42,8 @@ class TaskContextRequest(BaseModel):
     mentions_other_brands: bool = False
     requires_shopify_link: bool = False
     shopify_url: str = ""
+    ai_qa_content: str = ""
+    ai_qa_source: str = ""
     internal_links: list[InternalLinkRequest] = Field(default_factory=list)
 
 
@@ -76,6 +78,8 @@ class TaskCreateRequest(BaseModel):
                     "country": "de",
                     "requires_shopify_link": True,
                     "shopify_url": "https://de.ecoflow.com/products/stream-microinverter",
+                    "ai_qa_content": "AI answer summary for this keyword, if available.",
+                    "ai_qa_source": "https://example.com/source-used-by-ai",
                 },
             }
         }
@@ -111,16 +115,51 @@ class TaskDetailResponse(BaseModel):
 class OutlineCreateRequest(BaseModel):
     category: str = Field(..., examples=["geo"])
     keyword: str = Field(..., examples=["Welke thuisbatterij heeft de beste app"])
-    site_url: str = Field(..., min_length=1, examples=["https://www.ankersolix.com/nl"])
-    product_urls: list[str] = Field(default_factory=list)
+    info: str = ""
+    language: SupportedLanguage = "English"
     provider: str = Field(default="openai", examples=["openai", "anthropic"])
+    force_refresh: bool = False
+    task_context: TaskContextRequest = Field(default_factory=TaskContextRequest)
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "category": "geo",
+                "keyword": "Welke thuisbatterij heeft de beste app",
+                "info": "Brand: Anker SOLIX. Focus on home battery app experience and installation context.",
+                "language": "Dutch",
+                "provider": "openai",
+                "force_refresh": False,
+                "task_context": {
+                    "country": "nl",
+                    "requires_shopify_link": True,
+                    "shopify_url": "https://www.ankersolix.com/nl/products/a17c5",
+                    "ai_qa_content": "AI answer summary for this keyword, if available.",
+                    "ai_qa_source": "https://example.com/source-used-by-ai",
+                },
+            }
+        }
+    }
+
+
+class OutlineAcceptedData(BaseModel):
+    outline_id: int
+    status: str
+    access_tier: str
+    mode_type: int
+
+
+class OutlineCreateResponse(BaseModel):
+    success: bool = True
+    data: OutlineAcceptedData
 
 
 class OutlineData(BaseModel):
     category: str
     keyword: str
-    site_url: str
-    product_urls: list[str]
+    info: str
+    language: str
+    task_context: dict[str, Any]
     title: str
     outline_markdown: str
     writing_suggestions: list[str]
@@ -128,9 +167,9 @@ class OutlineData(BaseModel):
     generation_mode: str
 
 
-class OutlineResponse(BaseModel):
+class OutlineDetailResponse(BaseModel):
     success: bool = True
-    data: OutlineData
+    data: dict[str, Any]
 
 
 class ErrorResponse(BaseModel):

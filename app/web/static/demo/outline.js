@@ -15,7 +15,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const suggestionsNode = document.getElementById("outline-suggestions");
   const linksNode = document.getElementById("outline-links");
   const apiJson = document.getElementById("api-json");
+  const languageSelect = document.getElementById("language-select");
+  const countrySelect = document.getElementById("country-select");
   let accessToken = "";
+  let pollTimer = null;
+  const languageCountryMap = {
+    English: "us",
+    Chinese: "cn",
+    French: "fr",
+    German: "de",
+    Dutch: "nl",
+  };
+  const countryLanguageMap = Object.fromEntries(
+    Object.entries(languageCountryMap).map(([language, country]) => [country, language]),
+  );
 
   async function requestJson(url, options = {}) {
     try {
@@ -75,7 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function resetOutlineUi(message) {
     outlineBtn.disabled = false;
-    outlineBtn.innerHTML = "Generate Outline";
+    outlineBtn.innerHTML = "Start Outline Task";
     outlineMeta.textContent = message || "No outline yet";
   }
 
@@ -121,6 +134,57 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  function syncLanguageAndCountry(source) {
+    if (!languageSelect || !countrySelect) {
+      return;
+    }
+    if (source === "language") {
+      const mappedCountry = languageCountryMap[languageSelect.value];
+      if (mappedCountry) {
+        countrySelect.value = mappedCountry;
+      }
+      return;
+    }
+    const mappedLanguage = countryLanguageMap[countrySelect.value];
+    if (mappedLanguage) {
+      languageSelect.value = mappedLanguage;
+    }
+  }
+
+  function renderOutlineResult(task) {
+    const outline = task.outline || {};
+    outlineMeta.textContent = `Outline ${task.outline_id || task.task_id} · ${task.status}`;
+    if (task.access_tier) {
+      outlineMeta.textContent += ` · ${task.access_tier}`;
+    }
+    outlineOutput.textContent = outline.outline_markdown || "";
+    renderSuggestions(outline.writing_suggestions || []);
+    renderLinks(outline.recommended_internal_links || []);
+    apiJson.textContent = JSON.stringify(task, null, 2);
+  }
+
+  async function fetchOutline(outlineId) {
+    const result = await requestJson(`/api/outline/${outlineId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const payload = result.data || {};
+
+    if (!payload.success) {
+      apiJson.textContent = JSON.stringify(payload, null, 2);
+      if (["queued", "running"].includes(payload.status)) {
+        outlineMeta.textContent = `Outline ${payload.outline_id || outlineId} · ${payload.status}`;
+        pollTimer = setTimeout(() => fetchOutline(outlineId), 1500);
+        return;
+      }
+      outlineOutput.textContent = payload.message || "Unable to generate outline.";
+      resetOutlineUi("Outline failed");
+      return;
+    }
+
+    renderOutlineResult(payload.data || {});
+    resetOutlineUi(outlineMeta.textContent);
+  }
+
   authForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     tokenBtn.disabled = true;
@@ -140,30 +204,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
   outlineForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    clearTimeout(pollTimer);
     if (!accessToken) {
       outlineMeta.textContent = "Exchange a bearer token first";
       return;
     }
 
     outlineBtn.disabled = true;
-    outlineBtn.innerHTML = "Generating...";
-    outlineMeta.textContent = "Generating outline...";
-    outlineOutput.textContent = "Generating outline...";
+    outlineBtn.innerHTML = "Starting...";
+    outlineMeta.textContent = "Submitting outline task...";
+    outlineOutput.textContent = "Submitting outline task...";
     renderSuggestions([]);
     renderLinks([]);
     apiJson.textContent = JSON.stringify({ status: "submitting" }, null, 2);
 
     const formData = new FormData(outlineForm);
-    const productUrls = String(formData.get("product_urls") || "")
-      .split(/\n+/)
-      .map((item) => item.trim())
-      .filter(Boolean);
     const payload = {
       category: formData.get("category"),
+      language: formData.get("language") || "English",
       provider: formData.get("provider") || "openai",
       keyword: formData.get("keyword"),
-      site_url: formData.get("site_url"),
-      product_urls: productUrls,
+      info: formData.get("info") || "",
+      task_context: {
+        country: formData.get("country") || "",
+        requires_shopify_link: formData.get("requires_shopify_link") === "true",
+        shopify_url: formData.get("shopify_url") || "",
+        ai_qa_content: formData.get("ai_qa_content") || "",
+        ai_qa_source: formData.get("ai_qa_source") || "",
+      },
     };
 
     const result = await requestJson("/api/outline", {
@@ -183,12 +251,10 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const outline = data.data || {};
-    outlineMeta.textContent = `${outline.category?.toUpperCase() || "OUTLINE"} · ${outline.generation_mode || "ready"}`;
-    outlineOutput.textContent = outline.outline_markdown || "";
-    renderSuggestions(outline.writing_suggestions || []);
-    renderLinks(outline.recommended_internal_links || []);
-    resetOutlineUi(outlineMeta.textContent);
+    const accepted = data.data || {};
+    outlineMeta.textContent = `Outline ${accepted.outline_id} created · ${accepted.access_tier || "authorized"}`;
+    outlineOutput.textContent = "Outline task created. Polling result...";
+    fetchOutline(accepted.outline_id);
   });
 
   copyBtn.addEventListener("click", async () => {
@@ -206,6 +272,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   clearBtn.addEventListener("click", () => {
+    clearTimeout(pollTimer);
     outlineOutput.textContent = "Generate an outline to preview the result here.";
     renderSuggestions([]);
     renderLinks([]);
@@ -215,4 +282,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   renderTokenState(null);
   bindShellTabs();
+  if (languageSelect && countrySelect) {
+    languageSelect.addEventListener("change", () => syncLanguageAndCountry("language"));
+    countrySelect.addEventListener("change", () => syncLanguageAndCountry("country"));
+    syncLanguageAndCountry("language");
+  }
 });

@@ -527,6 +527,8 @@ document.addEventListener("DOMContentLoaded", () => {
         mentions_other_brands: formData.get("mentions_other_brands") === "true",
         requires_shopify_link: formData.get("requires_shopify_link") === "true",
         shopify_url: formData.get("shopify_url") || "",
+        ai_qa_content: formData.get("ai_qa_content") || "",
+        ai_qa_source: formData.get("ai_qa_source") || "",
       },
     };
     apiJson.textContent = JSON.stringify({ status: "submitting", payload }, null, 2);

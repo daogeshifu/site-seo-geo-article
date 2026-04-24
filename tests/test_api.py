@@ -33,6 +33,24 @@ def wait_for_task_completion(client: TestClient, bearer: dict[str, str], task_id
     raise AssertionError("task did not finish within timeout")
 
 
+def wait_for_outline_completion(
+    client: TestClient,
+    bearer: dict[str, str],
+    outline_id: int,
+    timeout: float = 5.0,
+) -> dict:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        outline_response = client.get(f"/api/outline/{outline_id}", headers=bearer)
+        assert outline_response.status_code == 200
+        body = outline_response.json()
+        if body.get("success") is False and body.get("status") in {"queued", "running"}:
+            time.sleep(0.1)
+            continue
+        return body["data"]
+    raise AssertionError("outline did not finish within timeout")
+
+
 def test_create_task_and_fetch_result(tmp_path: Path) -> None:
     app = create_app(
         {
@@ -72,6 +90,8 @@ def test_create_task_and_fetch_result(tmp_path: Path) -> None:
                 "country": "de",
                 "requires_shopify_link": True,
                 "shopify_url": "https://de.ecoflow.com/products/stream-microinverter",
+                "ai_qa_content": "AI answer: airline portable chargers are mostly limited by watt-hours.",
+                "ai_qa_source": "https://www.faa.gov/hazmat/packsafe/lithium-batteries",
             },
         },
     )
@@ -89,6 +109,8 @@ def test_create_task_and_fetch_result(tmp_path: Path) -> None:
     assert task_payload["mode_type"] == 1
     assert task_payload["word_limit"] == 1200
     assert task_payload["task_context"]["country"] == "de"
+    assert "watt-hours" in task_payload["task_context"]["ai_qa_content"]
+    assert task_payload["task_context"]["ai_qa_source"].startswith("https://www.faa.gov")
     assert task_payload["article"]["generation_mode"] == "mock"
     assert task_payload["article"]["slug"] == task_payload["article"]["slug"].lower()
     assert " " not in task_payload["article"]["slug"]
@@ -550,23 +572,40 @@ def test_generate_outline_returns_outline_suggestions_and_links(tmp_path: Path) 
         json={
             "category": "geo",
             "keyword": "Welke thuisbatterij heeft de beste app",
-            "site_url": "https://www.ankersolix.com/nl",
-            "product_urls": [
-                "https://www.ankersolix.com/nl/plug-and-play-thuisbatterij/thuisbatterij-a17e2?ref=naviMenu_4_copy",
-                "https://www.ankersolix.com/nl/products/a17c5",
-            ],
+            "info": "Brand: Anker SOLIX. Focus on app experience and household battery comparison.",
+            "language": "Dutch",
+            "task_context": {
+                "country": "nl",
+                "requires_shopify_link": True,
+                "shopify_url": "https://www.ankersolix.com/nl/products/a17c5",
+                "ai_qa_content": "AI answer: the best battery app should show live usage, backup status, and tariff insights.",
+                "ai_qa_source": "https://www.ankersolix.com/nl/blogs/home-energy",
+                "internal_links": [
+                    {
+                        "label": "Plug-and-play thuisbatterij",
+                        "url": "https://www.ankersolix.com/nl/plug-and-play-thuisbatterij/thuisbatterij-a17e2?ref=naviMenu_4_copy",
+                    }
+                ],
+            },
         },
     )
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["success"] is True
-    data = payload["data"]
-    assert data["generation_mode"] == "mock"
-    assert "Quick Answer" in data["outline_markdown"]
-    assert len(data["writing_suggestions"]) >= 3
-    assert len(data["recommended_internal_links"]) >= 2
-    assert data["recommended_internal_links"][0]["url"].startswith("https://www.ankersolix.com/nl")
+    accepted = payload["data"]
+    assert accepted["mode_type"] == 3
+
+    data = wait_for_outline_completion(client, bearer, accepted["outline_id"])
+    assert data["status"] == "completed"
+    assert data["outline"]["generation_mode"] == "mock"
+    assert "Quick Answer" in data["outline"]["outline_markdown"]
+    assert len(data["outline"]["writing_suggestions"]) >= 3
+    assert len(data["outline"]["recommended_internal_links"]) >= 2
+    assert data["outline"]["recommended_internal_links"][0]["url"].startswith("https://www.ankersolix.com/nl")
+    assert data["task_context"]["country"] == "nl"
+    assert "tariff insights" in data["task_context"]["ai_qa_content"]
+    assert data["task_context"]["ai_qa_source"].startswith("https://www.ankersolix.com")
 
 
 def test_export_task_docx_returns_formatted_word_file(tmp_path: Path) -> None:
@@ -704,6 +743,8 @@ def test_index_renders_token_and_task_console(tmp_path: Path) -> None:
     assert "Get 1-Day Token" in html
     assert "content_image_count" in html
     assert "mode_type" in html
+    assert "ai_qa_content" in html
+    assert "AI Q&A Content" in html
     assert "Keyword / Outline" in html
     assert "/api/tasks" in html
     assert "/api/token" in html
@@ -729,9 +770,13 @@ def test_outline_page_renders_outline_console(tmp_path: Path) -> None:
 
     html = response.text
     assert "SEO / GEO Outline Writer" in html
-    assert "Official Site URL" in html
-    assert "Product URLs" in html
+    assert "Info" in html
+    assert "Requires Shopify Link" in html
+    assert "Shopify URL" in html
+    assert "AI Q&A Content" in html
+    assert "ai_qa_source" in html
     assert "/api/outline" in html
+    assert "/api/outline/{outline_id}" in html
     assert "Article Demo" in html
 
 
@@ -754,6 +799,7 @@ def test_openapi_only_exposes_task_endpoints(tmp_path: Path) -> None:
     assert set(paths.keys()) == {
         "/api/token",
         "/api/outline",
+        "/api/outline/{outline_id}",
         "/api/tasks",
         "/api/tasks/{task_id}",
         "/api/tasks/{task_id}/export.docx",

@@ -176,6 +176,14 @@
                 Shopify / Product URL
                 <input type="url" name="shopify_url" placeholder="https://de.ecoflow.com/products/stream-microinverter" />
               </label>
+              <label class="full">
+                AI Q&A Content
+                <textarea name="ai_qa_content" rows="4" placeholder="Paste the answer returned by an AI assistant for this keyword. Optional, mainly useful for GEO mode."></textarea>
+              </label>
+              <label class="full">
+                AI Q&A Source Links
+                <textarea name="ai_qa_source" rows="3" placeholder="Paste source URLs adopted by the AI answer, one per line if there are multiple. Optional."></textarea>
+              </label>
               <label class="toggle full">
                 <input type="checkbox" name="requires_shopify_link" value="true" />
                 Force an early product-page link in the first two paragraphs
@@ -189,7 +197,7 @@
                 Force refresh and ignore cache for this run
               </label>
               <div class="token-note">
-                `mode_type` defaults to `1` for keyword mode and uses `2` for outline mode. In keyword mode, `keyword` is the target keyword. In outline mode, `keyword` stores the full outline and the writer will follow that structure strictly. `info` always stays as brand / product / customer context. The demo currently supports 5 language-country pairs through dropdowns only: English / United States, Chinese / China, French / France, German / Germany, and Dutch / Netherlands. `word_limit` defaults to `1200` and counts only text content (excluding images). `content_image_count` supports `0-3`. When it is `0`, no body images are generated. `include_cover` is only `0` or `1`.
+                `mode_type` defaults to `1` for keyword mode and uses `2` for outline mode. In keyword mode, `keyword` is the target keyword. In outline mode, `keyword` stores the full outline and the writer will follow that structure strictly. `info` always stays as brand / product / customer context. The demo currently supports 5 language-country pairs through dropdowns only: English / United States, Chinese / China, French / France, German / Germany, and Dutch / Netherlands. `ai_qa_content` and `ai_qa_source` are optional GEO reference fields. `word_limit` defaults to `1200` and counts only text content (excluding images). `content_image_count` supports `0-3`. When it is `0`, no body images are generated. `include_cover` is only `0` or `1`.
               </div>
               <div class="actions">
                 <button class="btn btn-primary" type="submit" id="submit-btn">Start Task</button>

@@ -9,12 +9,14 @@ from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.runtime import AppServices
+from app.services.task_modes import ARTICLE_MODE_TYPES, MODE_TYPE_OUTLINE_TASK
 from app.services.task_service import FINAL_STATUSES
 from .schemas import (
     ErrorResponse,
     OutlineCreateRequest,
+    OutlineCreateResponse,
     OutlineData,
-    OutlineResponse,
+    OutlineDetailResponse,
     TaskAcceptedData,
     TaskCreateRequest,
     TaskCreateResponse,
@@ -63,19 +65,20 @@ def create_api_router(services: AppServices) -> APIRouter:
     @router.post(
         "/outline",
         tags=["tasks"],
-        response_model=OutlineResponse,
+        response_model=OutlineCreateResponse,
         responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
-        summary="Generate a synchronous SEO or GEO article outline",
+        summary="Create an async SEO or GEO outline task",
     )
     async def create_outline(
         payload: OutlineCreateRequest,
         authorization: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    ) -> OutlineResponse | JSONResponse:
+    ) -> OutlineCreateResponse | JSONResponse:
         category = payload.category.strip().lower()
         keyword = payload.keyword.strip()
-        site_url = payload.site_url.strip()
-        product_urls = [item.strip() for item in payload.product_urls if item.strip()]
+        info = (payload.info or "").strip()
+        language = (payload.language or "English").strip() or "English"
         provider = (payload.provider or "openai").strip().lower()
+        task_context = services.writer_service.rulebook_service.normalize_task_context(payload.task_context.model_dump())
         auth_payload = resolve_auth_payload(services, authorization)
 
         if category not in {"seo", "geo"}:
@@ -90,10 +93,10 @@ def create_api_router(services: AppServices) -> APIRouter:
                 content={"success": False, "message": "valid bearer token is required"},
             )
 
-        if not keyword or not site_url:
+        if not keyword:
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                content={"success": False, "message": "keyword and site_url are required"},
+                content={"success": False, "message": "keyword is required"},
             )
 
         if provider not in {"openai", "anthropic"}:
@@ -103,12 +106,14 @@ def create_api_router(services: AppServices) -> APIRouter:
             )
 
         try:
-            outline = services.outline_service.generate(
+            outline = services.outline_task_service.create_task(
                 category=category,
                 keyword=keyword,
-                site_url=site_url,
-                product_urls=product_urls,
+                info=info,
+                task_context=task_context,
+                language=language,
                 provider=provider,
+                force_refresh=payload.force_refresh,
                 access_tier=auth_payload["tier"],
             )
         except ValueError as exc:
@@ -123,7 +128,73 @@ def create_api_router(services: AppServices) -> APIRouter:
                 content={"success": False, "message": "outline service is temporarily unavailable"},
             )
 
-        return OutlineResponse(data=OutlineData(**outline))
+        return OutlineCreateResponse(
+            data={
+                "outline_id": outline["task_id"],
+                "status": outline["status"],
+                "access_tier": auth_payload["tier"],
+                "mode_type": outline.get("mode_type", MODE_TYPE_OUTLINE_TASK),
+            }
+        )
+
+    @router.get(
+        "/outline/{outline_id}",
+        tags=["tasks"],
+        response_model=OutlineDetailResponse,
+        responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+        summary="Fetch an async outline task result",
+    )
+    async def get_outline(
+        outline_id: int,
+        authorization: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    ) -> OutlineDetailResponse | JSONResponse:
+        auth_payload = resolve_auth_payload(services, authorization)
+        if not auth_payload:
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"success": False, "message": "valid bearer token is required"},
+            )
+
+        try:
+            outline = services.outline_task_service.get_task(outline_id)
+        except Exception:
+            logger.exception("Outline service unavailable while fetching outline_id=%s.", outline_id)
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={
+                    "success": False,
+                    "message": "outline service is temporarily unavailable",
+                    "status": "error",
+                    "outline_id": outline_id,
+                },
+            )
+        if not outline:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"success": False, "message": "outline task not found"},
+            )
+        if outline.get("status") == "failed":
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "success": False,
+                    "message": outline.get("error_message") or "outline task failed",
+                    "status": "failed",
+                    "outline_id": outline_id,
+                    "error": outline.get("error_message"),
+                },
+            )
+        if outline.get("status") not in FINAL_STATUSES or not outline.get("outline"):
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "success": False,
+                    "message": "outline task not completed",
+                    "status": outline.get("status", "running"),
+                    "outline_id": outline_id,
+                },
+            )
+        return OutlineDetailResponse(data=outline)
 
     @router.post(
         "/tasks",
@@ -269,6 +340,11 @@ def create_api_router(services: AppServices) -> APIRouter:
                 status_code=status.HTTP_404_NOT_FOUND,
                 content={"success": False, "message": "task not found"},
             )
+        if int(task.get("mode_type", 0)) not in ARTICLE_MODE_TYPES:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"success": False, "message": "task not found"},
+            )
         if task.get("status") == "failed":
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
@@ -320,6 +396,11 @@ def create_api_router(services: AppServices) -> APIRouter:
             )
 
         if not task:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"success": False, "message": "task not found"},
+            )
+        if int(task.get("mode_type", 0)) not in ARTICLE_MODE_TYPES:
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
                 content={"success": False, "message": "task not found"},

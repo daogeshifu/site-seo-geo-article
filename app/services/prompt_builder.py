@@ -29,6 +29,10 @@ def _build_rule_brief(rule_context: dict[str, Any]) -> str:
         notes.append(f"- Product line: {context['product_line']}")
     if context.get("topic_flags"):
         notes.append(f"- Topic flags: {', '.join(context['topic_flags'])}")
+    if context.get("ai_qa_content"):
+        notes.append(f"- AI Q&A reference answer: {context['ai_qa_content']}")
+    if context.get("ai_qa_source"):
+        notes.append(f"- AI Q&A adopted source links: {context['ai_qa_source']}")
     if rule_context.get("required_disclaimer"):
         notes.append("- A disclaimer block is mandatory for this article.")
     if rule_context.get("requires_shopify_link"):
@@ -183,6 +187,7 @@ def build_strategy_prompt(
           7. TL;DR and update-log friendly structure
         - Headings should mirror user questions and retrieval intents
         - Do not invent external sources; describe the type of evidence needed
+        - If AI Q&A reference answer or adopted source links are provided in rule context, use them as GEO research input and cite/link only the provided source URLs when appropriate
         - Meta title should stay within 60 characters
         - Meta description should stay within 160 characters
         - If internal links are required, plan them near the top of the article
@@ -285,6 +290,7 @@ def build_draft_prompt(
         - Use short, extractable paragraphs
         - Make headings easy for AI systems to quote or summarize
         - Mention citations, proof, benchmark data, or source types without inventing fake source URLs
+        - Use AI Q&A reference answer and adopted source links from rule context as GEO reference material when provided
         - If brand/product info is provided, keep entity mentions consistent and verifiable
         - Respect all compliance notes, disclaimers, and compatibility constraints from the rule context
         {mode_requirements}
