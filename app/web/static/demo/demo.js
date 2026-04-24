@@ -182,6 +182,10 @@ document.addEventListener("DOMContentLoaded", () => {
           task.status === "completed"
             ? `<button class="btn btn-ghost btn-small recent-task-preview" type="button" data-task-id="${task.task_id}">详情预览</button>`
             : "";
+        const retryButton =
+          task.status === "failed"
+            ? `<button class="btn btn-primary btn-small recent-task-retry" type="button" data-task-id="${task.task_id}">重新执行</button>`
+            : "";
 
         return `
           <article class="recent-task-card">
@@ -207,6 +211,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="recent-task-actions">
               ${previewButton}
+              ${retryButton}
             </div>
           </article>
         `;
@@ -222,6 +227,116 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     });
+
+    recentTasks.querySelectorAll(".recent-task-retry").forEach((button) => {
+      button.addEventListener("click", () => {
+        const taskId = Number(button.dataset.taskId || 0);
+        if (taskId > 0) {
+          retryTask(taskId, button);
+        }
+      });
+    });
+  }
+
+  async function retryTask(taskId, button) {
+    if (button) {
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;margin:0"></span>';
+    }
+
+    const result = await requestJson(`/api/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const payload = result.data || {};
+
+    if (!payload.success) {
+      if (button) {
+        button.disabled = false;
+        button.innerHTML = "重新执行";
+      }
+      taskMeta.textContent = payload.message || `Unable to load task ${taskId}`;
+      return;
+    }
+
+    const task = payload.data;
+    const taskContext = task.task_context || {};
+    const submitPayload = {
+      category: task.category,
+      language: task.language || "English",
+      provider: task.provider || "openai",
+      keyword: task.keyword,
+      mode_type: task.mode_type || 1,
+      info: task.info || "",
+      force_refresh: true,
+      word_limit: task.word_limit || 1200,
+      include_cover: task.include_cover ?? 1,
+      content_image_count: task.content_image_count ?? 3,
+      task_context: {
+        country: taskContext.country || "",
+        mentions_other_brands: taskContext.mentions_other_brands || false,
+        requires_shopify_link: taskContext.requires_shopify_link || false,
+        shopify_url: taskContext.shopify_url || "",
+        ai_qa_content: taskContext.ai_qa_content || "",
+        ai_qa_source: taskContext.ai_qa_source || "",
+      },
+    };
+
+    clearTimeout(pollTimer);
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner" style="width:18px;height:18px;border-width:3px;margin:0"></span> Starting...';
+    taskMeta.textContent = `Retrying task ${taskId}...`;
+    results.innerHTML = `
+      <div class="loading-card loading-card-immersive">
+        <div class="generation-shell">
+          <div class="generation-orbit">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="generation-copy">
+            <strong>Retrying content generation</strong>
+            <div class="generation-subtitle">Resubmitting the failed task with force refresh enabled.</div>
+          </div>
+          <div class="generation-steps">
+            <div class="generation-step"><span class="generation-dot"></span><span>Intent and outline planning</span></div>
+            <div class="generation-step"><span class="generation-dot"></span><span>SEO / GEO article drafting</span></div>
+            <div class="generation-step"><span class="generation-dot"></span><span>HTML polishing and image packaging</span></div>
+          </div>
+          <div class="generation-bars">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+      </div>
+    `;
+    apiJson.textContent = JSON.stringify({ status: "retrying", original_task_id: taskId, payload: submitPayload }, null, 2);
+    renderSummary();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    const submitResult = await requestJson("/api/tasks", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(submitPayload),
+    });
+    const submitData = submitResult.data || {};
+
+    if (!submitData.success) {
+      taskMeta.textContent = submitData.message || `Retry failed (${submitResult.status || "network"})`;
+      results.innerHTML = '<div class="empty">The retry request could not be processed.</div>';
+      apiJson.textContent = JSON.stringify(submitData, null, 2);
+      resetTaskUi(taskMeta.textContent);
+      return;
+    }
+
+    taskMeta.textContent = `Task ${submitData.data.task_id} created · ${submitData.data.access_tier || "authorized"}`;
+    apiJson.textContent = JSON.stringify(submitData, null, 2);
+    refreshRecentTasks();
+    fetchTask(submitData.data.task_id);
   }
 
   async function refreshRecentTasks() {
