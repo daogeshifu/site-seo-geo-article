@@ -188,7 +188,7 @@ def build_strategy_prompt(
           7. direct, neutral, first-party explanatory tone
         - The final article structure is fixed:
           1. one H1 title
-          2. one H2 named Quick Answer
+          2. an opening paragraph starting with bold "Quick Answer:" (inline, not a separate H2 heading), followed by 1-2 short paragraphs
           3. one or more body H2 sections with optional H3 subsections
           4. one H2 named References and Evidence to Verify
           5. one H2 named FAQ
@@ -353,7 +353,7 @@ def build_polish_prompt(
         """
         - For GEO articles, the final structure must be exactly:
           1. one H1 title
-          2. one H2 named Quick Answer
+          2. an opening paragraph starting with bold "Quick Answer:" (inline, not a separate H2 heading), followed by 1-2 short paragraphs
           3. one or more body H2 sections with optional H3 subsections
           4. one H2 named References and Evidence to Verify
           5. one H2 named FAQ

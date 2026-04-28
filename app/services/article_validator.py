@@ -372,9 +372,11 @@ class ArticleValidator:
             conclusion_content = f'<p><strong>Disclaimer:</strong> {disclaimer}</p>{conclusion_content}'
             fixes.append("moved disclaimer into the GEO conclusion section")
 
+        quick_wrapped = self._ensure_wrapped_html(quick_content)
+        quick_inline = self._make_inline_quick_answer(quick_wrapped)
         rebuilt = [
             h1_block,
-            f"<h2>Quick Answer</h2>{self._ensure_wrapped_html(quick_content)}",
+            quick_inline,
             *[section.strip() for section in body_sections],
             f"<h2>References and Evidence to Verify</h2>{self._ensure_wrapped_html(references_content)}",
             f"<h2>FAQ</h2>{self._ensure_wrapped_html(faq_content)}",
@@ -384,7 +386,7 @@ class ArticleValidator:
 
     def _geo_structure_order_is_valid(self, html: str) -> bool:
         h1_match = FIRST_H1_RE.search(html)
-        quick_match = re.search(r"<h2>\s*Quick Answer\s*</h2>", html, re.IGNORECASE)
+        quick_match = re.search(r"<strong>\s*Quick Answer\s*[:：]?\s*</strong>", html, re.IGNORECASE)
         references_match = REFERENCES_RE.search(html)
         faq_match = FAQ_RE.search(html)
         conclusion_match = CONCLUSION_RE.search(html)
@@ -397,14 +399,22 @@ class ArticleValidator:
 
     def _quick_answer_block(self, keyword: str, summary: str) -> str:
         text = self._quick_answer_text(keyword, summary)
-        return f"<h2>Quick Answer</h2><p>{text}</p>"
+        return f"<p><strong>Quick Answer:</strong> {text}</p>"
 
     def _quick_answer_text(self, keyword: str, summary: str) -> str:
         return summary.strip() or (
             f"The short answer is that {keyword} content works best when it provides a direct recommendation first, "
             "then backs it up with verifiable product details, links, and source guidance."
         )
-        return f"<p><strong>Quick Answer:</strong> {text}</p>"
+
+    def _make_inline_quick_answer(self, wrapped_html: str) -> str:
+        """Ensure the quick-answer content starts with <strong>Quick Answer:</strong> inline."""
+        if "Quick Answer" in wrapped_html:
+            return wrapped_html
+        p_match = re.match(r"<p>(.*)", wrapped_html, re.IGNORECASE | re.DOTALL)
+        if p_match:
+            return f"<p><strong>Quick Answer:</strong> {p_match.group(1)}"
+        return f"<p><strong>Quick Answer:</strong> {wrapped_html}</p>"
 
     def _first_paragraph_text(self, html: str) -> str:
         match = P_RE.search(html)
