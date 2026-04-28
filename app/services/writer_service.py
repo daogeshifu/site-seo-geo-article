@@ -484,8 +484,7 @@ class WriterService:
             }
             html = f"""
 <h1>{strategy["h1_options"][0]}</h1>
-<h2>Quick Answer</h2>
-<p>{strategy["answer_first_summary"]}</p>
+<p><strong>Quick Answer:</strong> {strategy["answer_first_summary"]}</p>
 <p>Readers who want the official version can review the {internal_link} before diving into the supporting explanation.</p>
 <h2>What matters most about {keyword}</h2>
 <p>If the page is meant to perform in AI-driven discovery, the introduction should answer the core question first. Readers and systems alike should understand the conclusion without needing to scroll through a long setup section.</p>
