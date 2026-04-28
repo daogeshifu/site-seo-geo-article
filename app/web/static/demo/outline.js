@@ -223,6 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
       category: formData.get("category"),
       language: formData.get("language") || "English",
       provider: formData.get("provider") || "openai",
+      word_limit: Number(formData.get("word_limit") || 1200),
       keyword: formData.get("keyword"),
       info: formData.get("info") || "",
       task_context: {

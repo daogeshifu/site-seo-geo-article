@@ -34,6 +34,7 @@ class OutlineTaskService:
         task_context: dict[str, Any] | None = None,
         language: str = "English",
         provider: str = "openai",
+        word_limit: int = OUTLINE_WORD_LIMIT,
         force_refresh: bool = False,
         access_tier: str = "standard",
     ) -> dict[str, Any]:
@@ -44,6 +45,7 @@ class OutlineTaskService:
         normalized_language = (language or "English").strip() or "English"
         requested_provider = (provider or "openai").strip().lower() or "openai"
         normalized_access_tier = (access_tier or "standard").strip().lower() or "standard"
+        normalized_word_limit = max(200, min(10000, int(word_limit)))
         normalized_provider = self.outline_service.llm_client.resolve_execution_provider(
             requested_provider,
             normalized_access_tier,
@@ -60,7 +62,7 @@ class OutlineTaskService:
                 info=normalized_info,
                 task_context=normalized_task_context,
                 language=normalized_language,
-                word_limit=OUTLINE_WORD_LIMIT,
+                word_limit=normalized_word_limit,
                 access_tier=normalized_access_tier,
                 provider=normalized_provider,
             )
@@ -76,7 +78,7 @@ class OutlineTaskService:
                 "task_context": normalized_task_context,
                 "language": normalized_language,
                 "provider": normalized_provider,
-                "word_limit": OUTLINE_WORD_LIMIT,
+                "word_limit": normalized_word_limit,
                 "force_refresh": bool(force_refresh),
                 "include_cover": 0,
                 "content_image_count": 0,
@@ -116,6 +118,7 @@ class OutlineTaskService:
                 task_context=task.get("task_context") or {},
                 language=task.get("language", "English"),
                 provider=task.get("provider", "openai"),
+                word_limit=task.get("word_limit", OUTLINE_WORD_LIMIT),
                 access_tier=task.get("access_tier", "standard"),
             )
             self.task_repository.save_result(outline_id, outline)

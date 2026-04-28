@@ -113,6 +113,7 @@ def create_api_router(services: AppServices) -> APIRouter:
                 task_context=task_context,
                 language=language,
                 provider=provider,
+                word_limit=payload.word_limit,
                 force_refresh=payload.force_refresh,
                 access_tier=auth_payload["tier"],
             )

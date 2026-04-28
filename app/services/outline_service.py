@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.llm_client import LLMClient
+from app.services.prompt_builder import _body_structure_limits
 from app.services.rulebook_service import RulebookService
 from app.utils.common import extract_json_object
 
@@ -21,12 +22,14 @@ class OutlineService:
         task_context: dict[str, Any] | None = None,
         language: str = "English",
         provider: str = "openai",
+        word_limit: int = 1200,
         access_tier: str = "standard",
     ) -> dict[str, Any]:
         normalized_category = (category or "seo").strip().lower()
         normalized_keyword = keyword.strip()
         normalized_info = (info or "").strip()
         normalized_language = (language or "English").strip() or "English"
+        normalized_word_limit = max(200, int(word_limit))
         normalized_task_context = self.rulebook_service.normalize_task_context(task_context)
         rule_context = self.rulebook_service.resolve_rules(
             category=normalized_category,
@@ -46,6 +49,7 @@ class OutlineService:
                 language=normalized_language,
                 rule_context=rule_context,
                 available_links=available_links,
+                word_limit=normalized_word_limit,
             )
             raw = self.llm_client.complete(
                 prompt,
@@ -62,6 +66,7 @@ class OutlineService:
                 language=normalized_language,
                 task_context=normalized_task_context,
                 available_links=available_links,
+                word_limit=normalized_word_limit,
                 generation_mode="llm",
             )
 
@@ -72,6 +77,7 @@ class OutlineService:
             language=normalized_language,
             task_context=normalized_task_context,
             available_links=available_links,
+            word_limit=normalized_word_limit,
         )
 
     def _build_prompt(
@@ -83,8 +89,10 @@ class OutlineService:
         language: str,
         rule_context: dict[str, Any],
         available_links: list[dict[str, str]],
+        word_limit: int,
     ) -> str:
         mode_name = "GEO" if category == "geo" else "SEO"
+        limits = _body_structure_limits(word_limit)
         context = rule_context.get("context") or {}
         link_lines = (
             "\n".join(f"- {item['label']}: {item['url']}" for item in available_links)
@@ -133,8 +141,13 @@ Task context:
 Allowed internal links:
 {link_lines}
 
-Requirements:
+        Requirements:
 {mode_requirements}
+- Target approximately {word_limit} words/characters of textual content in the final article.
+- For this target length, keep the outline body within {limits["max_h2"]} H2 sections and {limits["max_h3"]} H3 subsections total.
+- Only use H3 when it materially improves clarity; do not add H3 by default.
+- FAQ should contain {limits["faq_count"]} natural questions for this target length.
+- Each body H2 should be substantial enough to support at least two meaningful content blocks in the final article.
 - Keep the outline practical, specific, and commercially relevant without sounding like an ad.
 - Use the business context and country rules when deciding comparison criteria and examples.
 - Use AI Q&A reference answer and adopted source links as GEO research input when provided.
@@ -167,6 +180,7 @@ Return strict JSON only:
         language: str,
         task_context: dict[str, Any],
         available_links: list[dict[str, str]],
+        word_limit: int,
         generation_mode: str,
     ) -> dict[str, Any]:
         writing_suggestions = [
@@ -175,7 +189,7 @@ Return strict JSON only:
             if str(item).strip()
         ]
         if not writing_suggestions:
-            writing_suggestions = self._default_writing_suggestions(category, keyword, info, task_context)
+            writing_suggestions = self._default_writing_suggestions(category, keyword, info, task_context, word_limit)
 
         allowed_urls = {item["url"] for item in available_links if item.get("url")}
         recommended_internal_links = []
@@ -198,7 +212,7 @@ Return strict JSON only:
 
         outline_markdown = str(payload.get("outline_markdown") or "").strip()
         if not outline_markdown:
-            outline_markdown = self._default_outline(category, keyword, available_links)
+            outline_markdown = self._default_outline(category, keyword, available_links, word_limit)
 
         return {
             "category": category,
@@ -222,6 +236,7 @@ Return strict JSON only:
         language: str,
         task_context: dict[str, Any],
         available_links: list[dict[str, str]],
+        word_limit: int,
     ) -> dict[str, Any]:
         return {
             "category": category,
@@ -230,14 +245,20 @@ Return strict JSON only:
             "language": language,
             "task_context": task_context,
             "title": keyword,
-            "outline_markdown": self._default_outline(category, keyword, available_links),
-            "writing_suggestions": self._default_writing_suggestions(category, keyword, info, task_context),
+            "outline_markdown": self._default_outline(category, keyword, available_links, word_limit),
+            "writing_suggestions": self._default_writing_suggestions(category, keyword, info, task_context, word_limit),
             "recommended_internal_links": self._default_internal_links(available_links),
             "generation_mode": "mock",
         }
 
-    def _default_outline(self, category: str, keyword: str, available_links: list[dict[str, str]]) -> str:
-        answer_label = "Quick Answer" if category == "geo" else "Intro"
+    def _default_outline(
+        self,
+        category: str,
+        keyword: str,
+        available_links: list[dict[str, str]],
+        word_limit: int,
+    ) -> str:
+        limits = _body_structure_limits(word_limit)
         source_label = "Bronnen en verificatie" if category == "geo" else "Aanbevolen interne links"
         first_link = next((item["url"] for item in available_links if item.get("url")), "")
         product_line = (
@@ -250,6 +271,37 @@ Return strict JSON only:
             if category == "geo"
             else "- Beantwoord de hoofdvraag in 2-3 zinnen."
         )
+        body_sections = [
+            (
+                "Wat betekent deze zoekvraag precies?",
+                "- Definieer de belangrijkste term of het besliskader.\n- Leg uit welke factoren het antwoord beïnvloeden.",
+            ),
+            (
+                "Belangrijkste vergelijking of besliscriteria",
+                "- Benoem 3-5 hoofdcriteria.\n- Houd deze sectie scanbaar en feitelijk.",
+            ),
+            (
+                "Welke oplossing past het best bij welke situatie?",
+                "- Verdeel dit in duidelijke subsecties per gebruikssituatie.\n- Koppel waar relevant naar een officiële interne pagina.",
+            ),
+            (
+                "Aandachtspunten vóór je kiest",
+                "- Benoem grenzen, randvoorwaarden of compatibiliteit.\n- Voeg nuance toe zodat de tekst geloofwaardig blijft.",
+            ),
+            (
+                "Veelgemaakte misverstanden of fouten",
+                "- Benoem welke aannames vaak tot een verkeerde keuze leiden.\n- Corrigeer ze kort en feitelijk.",
+            ),
+        ]
+        faq_lines = "\n".join(f"### Veelgestelde vraag {index}" for index in range(1, limits["faq_count"] + 1))
+        body_lines: list[str] = []
+        for title, bullet_block in body_sections[: limits["max_h2"]]:
+            body_lines.append(f"## {title}")
+            body_lines.append(bullet_block)
+        if limits["max_h3"] > 0:
+            body_lines.append("### Verdere nuance of subvraag")
+            body_lines.append("- Gebruik alleen een H3 als die echt helpt om een beslispunt te verduidelijken.")
+
         return f"""# {keyword}
 
 ## Introductie
@@ -257,30 +309,14 @@ Return strict JSON only:
 - Leg kort uit voor wie dit onderwerp relevant is.
 {product_line}
 
-## Wat betekent deze zoekvraag precies?
-- Definieer de belangrijkste term of het besliskader.
-- Leg uit welke factoren het antwoord beïnvloeden.
-
-## Belangrijkste vergelijking of besliscriteria
-- Benoem 3-5 hoofdcriteria.
-- Houd deze sectie scanbaar en feitelijk.
-
-## Welke oplossing past het best bij welke situatie?
-- Verdeel dit in duidelijke subsecties per gebruikssituatie.
-- Koppel waar relevant naar een officiële interne pagina.
-
-## Aandachtspunten vóór je kiest
-- Benoem grenzen, randvoorwaarden of compatibiliteit.
-- Voeg nuance toe zodat de tekst geloofwaardig blijft.
+{chr(10).join(body_lines)}
 
 ## Conclusie
 - Vat het antwoord kort samen.
 - Sluit af met een natuurlijke CTA.
 
 ## FAQ
-### Veelgestelde vraag 1
-### Veelgestelde vraag 2
-### Veelgestelde vraag 3
+{faq_lines}
 
 ## {source_label}
 - Gebruik alleen officiële of vooraf opgegeven interne links.
@@ -293,11 +329,16 @@ Return strict JSON only:
         keyword: str,
         info: str,
         task_context: dict[str, Any],
+        word_limit: int,
     ) -> list[str]:
         country = str(task_context.get("country") or "").upper()
+        limits = _body_structure_limits(word_limit)
         suggestions = [
             f"Open met een direct antwoord op '{keyword}' in de eerste 100-150 woorden.",
-            "Gebruik korte, scanbare H2-secties en vermijd generieke tussenkoppen.",
+            (
+                f"Gebruik korte, scanbare H2-secties en houd de body voor deze lengte binnen "
+                f"{limits['max_h2']} H2-koppen en {limits['max_h3']} H3-koppen."
+            ),
             "Werk met concrete criteria, zodat de lezer en AI-systemen het antwoord makkelijk kunnen samenvatten.",
         ]
         if info:
@@ -308,7 +349,7 @@ Return strict JSON only:
             suggestions.extend(
                 [
                     "Voeg een duidelijke bronnen- of verificatiesectie toe voor claims en productspecificaties.",
-                    "Maak de FAQ anders dan de hoofdtekst en laat elk antwoord een echte vervolgquery afdekken.",
+                    f"Maak de FAQ anders dan de hoofdtekst en houd die voor deze lengte bij {limits['faq_count']} natuurlijke vervolgvragen.",
                 ]
             )
         else:

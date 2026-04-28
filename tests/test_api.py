@@ -581,6 +581,7 @@ def test_generate_outline_returns_outline_suggestions_and_links(tmp_path: Path) 
             "keyword": "Welke thuisbatterij heeft de beste app",
             "info": "Brand: Anker SOLIX. Focus on app experience and household battery comparison.",
             "language": "Dutch",
+            "word_limit": 900,
             "task_context": {
                 "country": "nl",
                 "requires_shopify_link": True,
@@ -606,14 +607,41 @@ def test_generate_outline_returns_outline_suggestions_and_links(tmp_path: Path) 
     data = wait_for_outline_completion(client, bearer, accepted["outline_id"])
     assert data["status"] == "completed"
     assert data["provider"] == "openai:gpt-4.1-mini"
+    assert data["word_limit"] == 900
     assert data["outline"]["generation_mode"] == "mock"
     assert "Quick Answer" in data["outline"]["outline_markdown"]
+    assert "## Welke oplossing past het best bij welke situatie?" not in data["outline"]["outline_markdown"]
+    assert "### Veelgestelde vraag 3" not in data["outline"]["outline_markdown"]
     assert len(data["outline"]["writing_suggestions"]) >= 3
     assert len(data["outline"]["recommended_internal_links"]) >= 2
     assert data["outline"]["recommended_internal_links"][0]["url"].startswith("https://www.ankersolix.com/nl")
     assert data["task_context"]["country"] == "nl"
     assert "tariff insights" in data["task_context"]["ai_qa_content"]
     assert data["task_context"]["ai_qa_source"].startswith("https://www.ankersolix.com")
+
+    longer_response = client.post(
+        "/api/outline",
+        headers=bearer,
+        json={
+            "category": "geo",
+            "keyword": "Welke thuisbatterij heeft de beste app",
+            "info": "Brand: Anker SOLIX. Focus on app experience and household battery comparison.",
+            "language": "Dutch",
+            "word_limit": 1800,
+            "force_refresh": False,
+            "task_context": {
+                "country": "nl",
+                "requires_shopify_link": True,
+                "shopify_url": "https://www.ankersolix.com/nl/products/a17c5",
+            },
+        },
+    )
+    assert longer_response.status_code == 200
+    assert longer_response.json()["data"]["outline_id"] != accepted["outline_id"]
+    longer_data = wait_for_outline_completion(client, bearer, longer_response.json()["data"]["outline_id"])
+    assert longer_data["word_limit"] == 1800
+    assert "## Welke oplossing past het best bij welke situatie?" in longer_data["outline"]["outline_markdown"]
+    assert "### Veelgestelde vraag 3" in longer_data["outline"]["outline_markdown"]
 
 
 def test_export_task_docx_returns_formatted_word_file(tmp_path: Path) -> None:

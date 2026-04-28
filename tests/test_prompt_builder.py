@@ -55,6 +55,7 @@ def test_geo_prompts_include_ai_qa_reference_fields() -> None:
         "Brand: VoltGo",
         "English",
         rule_context,
+        1200,
     )
     draft_prompt = build_draft_prompt(
         "geo",
@@ -78,6 +79,7 @@ def test_geo_prompts_enforce_fixed_structure_and_direct_voice() -> None:
         "Brand: VoltGo",
         "German",
         {},
+        1200,
     )
     draft_prompt = build_draft_prompt(
         "geo",
@@ -124,8 +126,26 @@ def test_outline_prompt_includes_ai_qa_reference_fields() -> None:
             "locale_variant": "Dutch / Netherlands",
         },
         available_links=[],
+        word_limit=1200,
     )
 
     assert "AI Q&A reference answer" in prompt
     assert "energy-flow visibility" in prompt
     assert "https://example.com/ai-source" in prompt
+    assert "keep the outline body within 3 H2 sections and 3 H3 subsections total" in prompt
+
+
+def test_outline_prompt_adjusts_density_by_word_limit() -> None:
+    service = OutlineService(LLMClient(Settings(llm_mock_mode=True)))
+    prompt = service._build_prompt(
+        category="seo",
+        keyword="portable charger",
+        info="Brand: VoltGo",
+        language="English",
+        rule_context={},
+        available_links=[],
+        word_limit=900,
+    )
+
+    assert "keep the outline body within 2 H2 sections and 2 H3 subsections total" in prompt
+    assert "FAQ should contain 2 natural questions" in prompt

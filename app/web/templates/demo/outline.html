@@ -134,6 +134,10 @@
                   <option value="anthropic">Anthropic (Claude)</option>
                 </select>
               </label>
+              <label>
+                Word Limit
+                <input type="number" name="word_limit" min="200" max="10000" value="1200" />
+              </label>
               <label class="full">
                 Keyword
                 <input type="text" name="keyword" required placeholder="Welke thuisbatterij heeft de beste app" />
@@ -166,7 +170,7 @@
                 <textarea name="ai_qa_source" rows="3" placeholder="Paste source URLs adopted by the AI answer, one per line if there are multiple. Optional."></textarea>
               </label>
               <div class="token-note">
-                This page submits an async outline task, then polls by `outline_id`. `task_context` aligns with the article demo through `country`, `requires_shopify_link`, `shopify_url`, `ai_qa_content`, and `ai_qa_source`.
+                This page submits an async outline task, then polls by `outline_id`. `word_limit` also controls the recommended H2/H3/FAQ density, and `task_context` aligns with the article demo through `country`, `requires_shopify_link`, `shopify_url`, `ai_qa_content`, and `ai_qa_source`.
               </div>
               <div class="actions">
                 <button class="btn btn-primary" type="submit" id="outline-btn">Start Outline Task</button>

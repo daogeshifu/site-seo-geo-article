@@ -118,6 +118,7 @@ class OutlineCreateRequest(BaseModel):
     info: str = ""
     language: SupportedLanguage = "English"
     provider: str = Field(default="openai", examples=["openai", "anthropic"])
+    word_limit: int = Field(default=1200, ge=200, le=10000)
     force_refresh: bool = False
     task_context: TaskContextRequest = Field(default_factory=TaskContextRequest)
 
@@ -129,6 +130,7 @@ class OutlineCreateRequest(BaseModel):
                 "info": "Brand: Anker SOLIX. Focus on home battery app experience and installation context.",
                 "language": "Dutch",
                 "provider": "openai",
+                "word_limit": 1200,
                 "force_refresh": False,
                 "task_context": {
                     "country": "nl",
