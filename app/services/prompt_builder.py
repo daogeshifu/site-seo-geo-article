@@ -294,7 +294,7 @@ def build_draft_prompt(
         - All visible text, including the H1 title, all headings, paragraph text, list text, and anchor text, must be written in {language}
         - The final structure must be exactly:
           1. one H1 title
-          2. one H2 with the exact text Quick Answer, followed by 1-2 short paragraphs
+          2. Quick Answer as inline bold text at the start of the opening paragraph (not a separate heading),followed by 1-2 short paragraphs
           3. one or more body H2 sections with optional H3 subsections
           4. one H2 with the exact text References and Evidence to Verify
           5. one H2 with the exact text FAQ

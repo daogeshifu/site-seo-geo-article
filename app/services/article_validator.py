@@ -404,6 +404,7 @@ class ArticleValidator:
             f"The short answer is that {keyword} content works best when it provides a direct recommendation first, "
             "then backs it up with verifiable product details, links, and source guidance."
         )
+        return f"<p><strong>Quick Answer:</strong> {text}</p>"
 
     def _first_paragraph_text(self, html: str) -> str:
         match = P_RE.search(html)

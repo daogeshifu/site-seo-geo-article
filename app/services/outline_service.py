@@ -245,10 +245,15 @@ Return strict JSON only:
             if first_link
             else "- Voeg vroeg in het artikel een relevante interne productlink toe."
         )
+        quick_answer_instruction = (
+            "- Begin de openingsalinea met **Quick Answer:** gevolgd door een direct antwoord in 2-3 zinnen (geen apart kopje)."
+            if category == "geo"
+            else "- Beantwoord de hoofdvraag in 2-3 zinnen."
+        )
         return f"""# {keyword}
 
-## {answer_label}
-- Beantwoord de hoofdvraag in 2-3 zinnen.
+## Introductie
+{quick_answer_instruction}
 - Leg kort uit voor wie dit onderwerp relevant is.
 {product_line}
 

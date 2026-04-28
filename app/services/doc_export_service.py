@@ -78,7 +78,6 @@ class DocExportService:
         document = Document()
         self._add_meta(document, task, article)
         document.add_paragraph("")
-        document.add_paragraph(title, style="Heading 1")
         self._add_article_body(document, article)
 
         buffer = BytesIO()
@@ -103,14 +102,9 @@ class DocExportService:
         parser = _HTMLBlockParser()
         parser.feed(str(article.get("raw_html") or article.get("html") or ""))
 
-        first_h1_skipped = False
-        article_title = _normalize_text(str(article.get("title") or ""))
         for block in parser.blocks:
             block_text = _normalize_text("".join(segment["text"] for segment in block["segments"]))
             if not block_text:
-                continue
-            if block["tag"] == "h1" and not first_h1_skipped and block_text == article_title:
-                first_h1_skipped = True
                 continue
 
             if block["tag"] == "h1":
