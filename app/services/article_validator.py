@@ -101,6 +101,13 @@ class ArticleValidator:
             )
             fixes.extend(geo_fix_notes)
 
+        html, density_fix_notes = self._normalize_body_density(
+            html,
+            category=category,
+            word_limit=int(working.get("word_limit") or 1200),
+        )
+        fixes.extend(density_fix_notes)
+
         h1_count = len(H1_RE.findall(html))
         if h1_count != 1:
             warnings.append(f"expected exactly one H1, found {h1_count}")
@@ -441,9 +448,109 @@ class ArticleValidator:
                 f"How can I tell whether {keyword} is the right fit for my situation?",
                 "Compare the decision criteria that matter most in practice, such as compatibility, limits, setup effort, or ongoing cost.",
             ),
-            (
-                f"What sources should I verify before acting on advice about {keyword}?",
-                "Check official documentation, current specifications, and any policy or brand statements that support the final recommendation.",
-            ),
         ]
         return "".join(f"<h3>{question}</h3><p>{answer}</p>" for question, answer in questions)
+
+    def _normalize_body_density(self, html: str, *, category: str, word_limit: int) -> tuple[str, list[str]]:
+        h1_match = FIRST_H1_RE.search(html)
+        if not h1_match:
+            return html, []
+
+        remainder = html[h1_match.end() :]
+        first_h2_match = re.search(r"<h2\b", remainder, re.IGNORECASE)
+        if not first_h2_match:
+            return html, []
+
+        limits = self._density_limits(word_limit)
+        h1_block = h1_match.group(0).strip()
+        preamble = remainder[: first_h2_match.start()]
+        section_source = remainder[first_h2_match.start() :]
+        special_titles = self._special_h2_titles(category)
+
+        body_sections: list[dict[str, str]] = []
+        special_sections: list[str] = []
+        fixes: list[str] = []
+
+        for match in H2_SECTION_RE.finditer(section_source):
+            heading_html = match.group(1)
+            heading_text = self._strip_tags(match.group(2)).strip()
+            content = match.group(3).strip()
+            heading_key = re.sub(r"\s+", " ", heading_text.lower())
+            full_section = f"{heading_html}{content}"
+            if heading_key in special_titles:
+                special_sections.append(full_section)
+                continue
+            body_sections.append({"heading_html": heading_html, "title": heading_text, "content": content})
+
+        if not body_sections:
+            return html, []
+
+        condensed_sections: list[dict[str, str]] = []
+        for section in body_sections:
+            if condensed_sections and self._count_content_blocks(section["content"]) < 2:
+                condensed_sections[-1]["content"] += self._render_subsection(section["title"], section["content"])
+                fixes.append(f"merged a short body H2 section '{section['title']}' into the previous section")
+                continue
+            condensed_sections.append(section)
+
+        while len(condensed_sections) > limits["max_h2"] and len(condensed_sections) > 1:
+            extra = condensed_sections.pop()
+            condensed_sections[-1]["content"] += self._render_subsection(extra["title"], extra["content"])
+            fixes.append(f"collapsed an extra body H2 section '{extra['title']}' into the previous section")
+
+        remaining_h3 = limits["max_h3"]
+        for section in condensed_sections:
+            normalized_content, remaining_h3, converted = self._limit_h3_usage(section["content"], remaining_h3)
+            if converted:
+                fixes.append(f"reduced H3 density inside '{section['title']}'")
+            section["content"] = normalized_content
+
+        rebuilt = [
+            h1_block,
+            preamble.strip(),
+            *[f"{section['heading_html']}{section['content']}".strip() for section in condensed_sections],
+            *[section.strip() for section in special_sections],
+        ]
+        return "\n".join(part for part in rebuilt if part).strip(), fixes
+
+    def _density_limits(self, word_limit: int) -> dict[str, int]:
+        normalized_limit = max(200, int(word_limit))
+        if normalized_limit <= 1000:
+            return {"max_h2": 2, "max_h3": 2}
+        if normalized_limit <= 1400:
+            return {"max_h2": 3, "max_h3": 3}
+        if normalized_limit <= 1800:
+            return {"max_h2": 4, "max_h3": 4}
+        return {"max_h2": 5, "max_h3": 5}
+
+    def _special_h2_titles(self, category: str) -> set[str]:
+        if category == "geo":
+            return {"references and evidence to verify", "faq", "conclusion"}
+        return {"conclusion", "faq", "disclaimer"}
+
+    def _count_content_blocks(self, content: str) -> int:
+        return len(re.findall(r"<(p|ul|ol|h3)\b", content, re.IGNORECASE))
+
+    def _render_subsection(self, title: str, content: str) -> str:
+        body = content.strip() or "<p>Expand this supporting point with concrete detail.</p>"
+        return f"<h3>{title}</h3>{body}"
+
+    def _limit_h3_usage(self, content: str, remaining_h3: int) -> tuple[str, int, bool]:
+        pattern = re.compile(r"<h3\b[^>]*>(.*?)</h3>", re.IGNORECASE | re.DOTALL)
+        parts: list[str] = []
+        last_end = 0
+        converted = False
+
+        for match in pattern.finditer(content):
+            parts.append(content[last_end : match.start()])
+            title = self._strip_tags(match.group(1)).strip()
+            if remaining_h3 > 0:
+                parts.append(match.group(0))
+                remaining_h3 -= 1
+            else:
+                parts.append(f"<p><strong>{title}:</strong></p>")
+                converted = True
+            last_end = match.end()
+
+        parts.append(content[last_end:])
+        return "".join(parts), remaining_h3, converted

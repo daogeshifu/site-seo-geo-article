@@ -16,6 +16,7 @@ def test_build_draft_prompt_includes_word_limit() -> None:
     )
     assert "1800" in prompt
     assert "excluding any image content" in prompt
+    assert "at most 4 body H2 sections and at most 4 body H3 subsections" in prompt
 
 
 def test_build_polish_prompt_includes_word_limit() -> None:
@@ -89,14 +90,22 @@ def test_geo_prompts_enforce_fixed_structure_and_direct_voice() -> None:
     polish_prompt = build_polish_prompt("geo", "German", "best home battery app", "<h1>demo</h1>", {}, 1200)
 
     assert "Titles, section headings, anchor text, and body content must all use German" in strategy_prompt
+    assert "at most 3 body H2 sections and at most 3 body H3 subsections" in strategy_prompt
     assert "FAQ questions must be practical, natural, and closely related to the keyword" in strategy_prompt
     assert "The final structure must be exactly" in draft_prompt
     assert "References and Evidence to Verify must appear immediately before FAQ" in draft_prompt
     assert "FAQ must appear immediately before Conclusion" in draft_prompt
+    assert "FAQ must contain 2 H3 questions" in draft_prompt
     assert 'Do not write in a third-party narrator tone such as "According to official docs"' in draft_prompt
     assert "Remove third-party narrator phrasing" in polish_prompt
     assert "one H2 named FAQ" in polish_prompt
     assert "Unless the article has a clear structural problem, do not add, remove, reorder, or rename sections" in polish_prompt
+
+
+def test_build_polish_prompt_includes_density_guidance() -> None:
+    prompt = build_polish_prompt("seo", "English", "portable charger", "<h1>demo</h1>", {}, 1200)
+    assert "keep the body within 3 H2 sections and 3 H3 subsections total" in prompt
+    assert "avoid adding new headings" in prompt
 
 
 def test_outline_prompt_includes_ai_qa_reference_fields() -> None:

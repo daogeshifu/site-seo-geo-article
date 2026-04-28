@@ -61,6 +61,7 @@ class WriterService:
                 info,
                 language,
                 rule_context,
+                normalized_word_limit,
                 normalized_mode_type,
             )
             raw_strategy = self.llm_client.complete(
@@ -71,7 +72,9 @@ class WriterService:
             )
             strategy = extract_json_object(raw_strategy)
             if category == "geo":
-                strategy = self._normalize_geo_strategy(strategy, keyword)
+                strategy = self._normalize_geo_strategy(strategy, keyword, normalized_word_limit)
+            else:
+                strategy = self._normalize_seo_strategy(strategy, keyword, normalized_word_limit)
 
             draft_prompt = build_draft_prompt(
                 category,
@@ -398,7 +401,6 @@ class WriterService:
                     {"level": "H2", "title": "FAQ"},
                 ],
                 "faq_questions": [
-                    f"How many times should {keyword} appear in the article?",
                     f"How long should a {keyword} article be?",
                     "How can product information be added naturally?",
                 ],
@@ -436,8 +438,6 @@ class WriterService:
 <h2>Conclusion</h2>
 <p>{keyword} articles work best when the structure is deliberate, the keyword placement is natural, and every section earns its place. Use this draft as a starting frame, then replace the placeholder facts with your actual brand proof, SERP findings, and internal links before publishing.</p>
 <h2>FAQ</h2>
-<h3>How many times should {keyword} appear in the article?</h3>
-<p>Enough to stay natural. Priority placements are the title, H1, introduction, and conclusion.</p>
 <h3>How long should a {keyword} article be?</h3>
 <p>A practical target is around 1000-1500 words, but the final length should reflect the SERP and the depth of the topic.</p>
 <h3>How can product information be added naturally?</h3>
@@ -503,12 +503,10 @@ class WriterService:
 <p>Instead of inventing links, define the reference categories the final article should cite. Official product documentation, trusted third-party benchmarks, regulatory pages, and policy explainers are usually stronger than generic blog commentary.</p>
 <p>This is also where inline citations, quote-ready facts, and clearly labeled verification notes can improve extraction quality.</p>
 <h2>FAQ</h2>
-<h3>{strategy["faq_questions"][0]}</h3>
-<p>Start with the most practical factor that changes the answer, then explain the evidence or product detail the reader should verify.</p>
-<h3>{strategy["faq_questions"][1]}</h3>
-<p>Compare the criteria that matter in real use, such as compatibility, limits, setup effort, or long-term value.</p>
-<h3>{strategy["faq_questions"][2]}</h3>
-<p>Point readers to the official documents, specifications, or policy pages that confirm the final recommendation.</p>
+{''.join(
+    f'<h3>{question}</h3><p>{"Start with the most practical factor that changes the answer, then explain the evidence or product detail the reader should verify." if index == 0 else "Compare the criteria that matter in real use, such as compatibility, limits, setup effort, or long-term value."}</p>'
+    for index, question in enumerate(strategy["faq_questions"])
+)}
 <h2>Conclusion</h2>
 <p>{keyword} pages work best when they are direct, evidence-backed, and consistent about the entities they discuss. Use this draft as the structure, then replace the placeholder proof guidance with verified citations before publishing.</p>
 """.strip()
@@ -561,8 +559,9 @@ class WriterService:
 
         return title, outline
 
-    def _normalize_geo_strategy(self, strategy: dict[str, Any], keyword: str) -> dict[str, Any]:
+    def _normalize_geo_strategy(self, strategy: dict[str, Any], keyword: str, word_limit: int) -> dict[str, Any]:
         normalized = deepcopy(strategy)
+        limits = self._structure_limits(word_limit)
         raw_outline = normalized.get("outline") if isinstance(normalized.get("outline"), list) else []
         filtered_outline: list[dict[str, str]] = []
 
@@ -581,14 +580,17 @@ class WriterService:
                 continue
             filtered_outline.append({"level": level, "title": title})
 
-        if not filtered_outline:
-            filtered_outline = [
+        normalized["outline"] = self._trim_outline_density(
+            filtered_outline,
+            keyword,
+            default_sections=[
                 {"level": "H2", "title": f"What matters most about {keyword}"},
                 {"level": "H2", "title": "Proof points and entity context"},
                 {"level": "H3", "title": "Evidence readers should verify"},
-            ]
-
-        normalized["outline"] = filtered_outline
+            ],
+            max_h2=limits["max_h2"],
+            max_h3=limits["max_h3"],
+        )
         normalized["schema_suggestions"] = ["Article"]
         normalized["trust_signals"] = [
             "author byline",
@@ -602,15 +604,113 @@ class WriterService:
             for item in faq_questions
             if str(item).strip()
         ]
-        normalized["faq_questions"] = cleaned_questions[:4] or self._fallback_geo_faq_questions(keyword)
+        normalized["faq_questions"] = cleaned_questions[: limits["faq_count"]] or self._fallback_geo_faq_questions(
+            keyword,
+            limits["faq_count"],
+        )
         return normalized
 
-    def _fallback_geo_faq_questions(self, keyword: str) -> list[str]:
-        return [
+    def _normalize_seo_strategy(self, strategy: dict[str, Any], keyword: str, word_limit: int) -> dict[str, Any]:
+        normalized = deepcopy(strategy)
+        limits = self._structure_limits(word_limit)
+        raw_outline = normalized.get("outline") if isinstance(normalized.get("outline"), list) else []
+        filtered_outline: list[dict[str, str]] = []
+
+        for item in raw_outline:
+            if not isinstance(item, dict):
+                continue
+            level = str(item.get("level") or "").upper()
+            title = str(item.get("title") or "").strip()
+            if not title or level not in {"H2", "H3"}:
+                continue
+
+            title_key = re.sub(r"\s+", " ", title.lower())
+            if title_key in {"conclusion", "faq", "appendix", "summary"}:
+                continue
+            filtered_outline.append({"level": level, "title": title})
+
+        normalized["outline"] = self._trim_outline_density(
+            filtered_outline,
+            keyword,
+            default_sections=[
+                {"level": "H2", "title": f"What {keyword} really means for search intent"},
+                {"level": "H2", "title": f"How to structure a strong {keyword} article"},
+                {"level": "H2", "title": "How brand and product context can strengthen the content"},
+            ],
+            max_h2=limits["max_h2"],
+            max_h3=limits["max_h3"],
+        )
+        faq_questions = normalized.get("faq_questions") if isinstance(normalized.get("faq_questions"), list) else []
+        cleaned_questions = [str(item).strip() for item in faq_questions if str(item).strip()]
+        normalized["faq_questions"] = cleaned_questions[: limits["faq_count"]] or self._fallback_seo_faq_questions(
+            keyword,
+            limits["faq_count"],
+        )
+        return normalized
+
+    def _trim_outline_density(
+        self,
+        outline: list[dict[str, str]],
+        keyword: str,
+        *,
+        default_sections: list[dict[str, str]],
+        max_h2: int,
+        max_h3: int,
+    ) -> list[dict[str, str]]:
+        kept: list[dict[str, str]] = []
+        h2_count = 0
+        h3_count = 0
+
+        for item in outline:
+            level = item["level"]
+            title = item["title"]
+            if level == "H2":
+                if h2_count >= max_h2:
+                    if kept and h3_count < max_h3:
+                        kept.append({"level": "H3", "title": title})
+                        h3_count += 1
+                    continue
+                kept.append({"level": "H2", "title": title})
+                h2_count += 1
+                continue
+
+            if not any(entry["level"] == "H2" for entry in kept):
+                continue
+            if h3_count >= max_h3:
+                continue
+            kept.append({"level": "H3", "title": title})
+            h3_count += 1
+
+        if any(entry["level"] == "H2" for entry in kept):
+            return kept
+        fallback = deepcopy(default_sections)
+        return fallback[: max_h2 + max_h3]
+
+    def _structure_limits(self, word_limit: int) -> dict[str, int]:
+        normalized_limit = max(200, int(word_limit))
+        if normalized_limit <= 1000:
+            return {"max_h2": 2, "max_h3": 2, "faq_count": 2}
+        if normalized_limit <= 1400:
+            return {"max_h2": 3, "max_h3": 3, "faq_count": 2}
+        if normalized_limit <= 1800:
+            return {"max_h2": 4, "max_h3": 4, "faq_count": 3}
+        return {"max_h2": 5, "max_h3": 5, "faq_count": 4}
+
+    def _fallback_geo_faq_questions(self, keyword: str, faq_count: int = 2) -> list[str]:
+        questions = [
             f"What should I check first about {keyword}?",
             f"How can I tell whether {keyword} is the right fit for my situation?",
             f"What sources should I verify before acting on advice about {keyword}?",
         ]
+        return questions[:faq_count]
+
+    def _fallback_seo_faq_questions(self, keyword: str, faq_count: int = 2) -> list[str]:
+        questions = [
+            f"How long should a {keyword} article be?",
+            f"How can I cover {keyword} without making the article feel repetitive?",
+            f"What supporting details make a {keyword} article more useful?",
+        ]
+        return questions[:faq_count]
 
     def _attach_images(
         self,

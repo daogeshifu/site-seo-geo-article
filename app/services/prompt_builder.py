@@ -12,6 +12,17 @@ def _normalize_mode_type(mode_type: int) -> int:
     return MODE_TYPE_OUTLINE if int(mode_type) == MODE_TYPE_OUTLINE else MODE_TYPE_KEYWORD
 
 
+def _body_structure_limits(word_limit: int) -> dict[str, int]:
+    normalized_limit = max(200, int(word_limit))
+    if normalized_limit <= 1000:
+        return {"max_h2": 2, "max_h3": 2, "faq_count": 2}
+    if normalized_limit <= 1400:
+        return {"max_h2": 3, "max_h3": 3, "faq_count": 2}
+    if normalized_limit <= 1800:
+        return {"max_h2": 4, "max_h3": 4, "faq_count": 3}
+    return {"max_h2": 5, "max_h3": 5, "faq_count": 4}
+
+
 def _build_rule_brief(rule_context: dict[str, Any]) -> str:
     context = rule_context.get("context", {})
     notes = [
@@ -56,10 +67,12 @@ def build_strategy_prompt(
     info: str,
     language: str,
     rule_context: dict[str, Any] | None = None,
+    word_limit: int = 1200,
     mode_type: int = MODE_TYPE_KEYWORD,
 ) -> str:
     rule_brief = _build_rule_brief(rule_context or {})
     normalized_mode_type = _normalize_mode_type(mode_type)
+    limits = _body_structure_limits(word_limit)
     mode_context = (
         f"""
         Provided outline from the keyword field:
@@ -127,9 +140,12 @@ def build_strategy_prompt(
               2. Meta description should stay within 160 characters
               3. Use exactly one H1
               4. Structure should be H1, introduction, H2/H3 body, conclusion, FAQ
-              5. FAQ should contain 2-4 questions
+              5. FAQ should contain {limits["faq_count"]} natural follow-up questions for this target length
               6. Titles should reflect the core topic naturally
-            - Outline should target a 1000-1500 word article
+            - Outline should target approximately {word_limit} words/characters of textual content
+            - For this target length, use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections in total
+            - Only use H3 when it materially improves clarity; do not add H3 by default
+            - Each body H2 section should carry enough substance for at least two meaningful paragraphs or one paragraph plus one list block
             - Headings should be specific, benefit-driven, and not generic
             - Link opportunities should describe relevant anchor ideas and use provided URLs only when available
             - Internal link plan should call out the best early-link placement when rule context requires it
@@ -194,7 +210,11 @@ def build_strategy_prompt(
           5. one H2 named FAQ
           6. one H2 named Conclusion
         - The outline field must describe body sections only
+        - For this target length, use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections in total
+        - Only use H3 when it materially improves clarity; do not add H3 by default
+        - Each body H2 section should carry enough substance for at least two meaningful paragraphs or one paragraph plus one list block
         - FAQ questions must be practical, natural, and closely related to the keyword and the questions readers would ask in daily decision-making
+        - FAQ should contain {limits["faq_count"]} natural user questions for this target length
         - Do not plan or mention TL;DR, update log, appendix, or extra top-level sections outside the fixed structure
         - Headings should mirror user questions and retrieval intents
         - Do not invent external sources; describe the type of evidence needed
@@ -220,6 +240,7 @@ def build_draft_prompt(
 ) -> str:
     rule_brief = _build_rule_brief(rule_context or {})
     normalized_mode_type = _normalize_mode_type(mode_type)
+    limits = _body_structure_limits(word_limit)
     content_context = (
         f"""
             Outline from keyword field:
@@ -264,8 +285,11 @@ def build_draft_prompt(
               2. introduction that answers intent quickly
               3. H2/H3 body sections
               4. conclusion
-              5. FAQ section with 2-4 questions
+              5. FAQ section with {limits["faq_count"]} natural follow-up questions
             - Target approximately {word_limit} words/characters of textual content (excluding any image content)
+            - For this target length, use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections in total
+            - Only use H3 when it materially improves clarity; do not add H3 by default
+            - Each body H2 section should contain at least two meaningful content blocks, usually two paragraphs or one paragraph plus one list
             - When mode_type=1, keep the main keyword naturally present in H1, intro, and conclusion
             - Paragraphs should stay compact and readable
             - When mode_type=1, use long-tail keywords naturally and never stuff them
@@ -301,7 +325,10 @@ def build_draft_prompt(
           6. one H2 with the exact text Conclusion
         - References and Evidence to Verify must appear immediately before FAQ
         - FAQ must appear immediately before Conclusion
-        - FAQ must contain 2-4 H3 questions, and each question must be a realistic user question related to {keyword}
+        - For this target length, use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections in total
+        - Only use H3 when it materially improves clarity; do not add H3 by default
+        - Each body H2 section should contain at least two meaningful content blocks, usually two paragraphs or one paragraph plus one list
+        - FAQ must contain {limits["faq_count"]} H3 questions, and each question must be a realistic user question related to {keyword}
         - Each FAQ question must be followed by one concise answer paragraph
         - Conclusion must be the final H2 section
         - Do not add TL;DR, update log, appendix, or any extra top-level section outside the fixed structure
@@ -369,6 +396,7 @@ def build_polish_prompt(
         if category == "geo"
         else ""
     )
+    density_notes = _body_structure_limits(word_limit)
     return dedent(
         f"""
         You are an expert editor.
@@ -381,6 +409,8 @@ def build_polish_prompt(
         - Keep the article in {language}
         - {topic_requirement}
         - Keep textual content close to {word_limit} words/characters (excluding image content)
+        - For this target length, keep the body within {density_notes["max_h2"]} H2 sections and {density_notes["max_h3"]} H3 subsections total whenever possible
+        - If the draft already fits the structure, avoid adding new headings; strengthen the existing wording instead
         - Keep compliance with the following rule context:
         {rule_brief}
         {geo_requirements}

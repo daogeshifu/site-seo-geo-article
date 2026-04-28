@@ -32,8 +32,8 @@ def test_geo_validator_normalizes_section_order_and_removes_third_party_voice() 
     )
     html = normalized["raw_html"]
 
-    assert html.index("<h1>Portable Charger on Plane</h1>") < html.index("<h2>Quick Answer</h2>")
-    assert html.index("<h2>Quick Answer</h2>") < html.index("<h2>References and Evidence to Verify</h2>")
+    assert html.index("<h1>Portable Charger on Plane</h1>") < html.index("<strong>Quick Answer:</strong>")
+    assert html.index("<strong>Quick Answer:</strong>") < html.index("<h2>References and Evidence to Verify</h2>")
     assert html.index("<h2>References and Evidence to Verify</h2>") < html.index("<h2>FAQ</h2>")
     assert html.index("<h2>FAQ</h2>") < html.index("<h2>Conclusion</h2>")
     assert "<h2>Update log</h2>" not in html
@@ -72,3 +72,45 @@ def test_geo_validator_keeps_disclaimer_inside_conclusion() -> None:
 
     assert "<h2>Disclaimer</h2>" not in html
     assert "<h2>Conclusion</h2><p><strong>Disclaimer:</strong> Programs change without notice.</p>" in html
+
+
+def test_seo_validator_collapses_dense_body_headings_for_1200_word_article() -> None:
+    validator = ArticleValidator()
+    article = {
+        "title": "Portable Charger Guide",
+        "meta_title": "Portable Charger Guide",
+        "meta_description": "Demo description",
+        "word_limit": 1200,
+        "raw_html": """
+<h1>Portable Charger Guide</h1>
+<p>Intro paragraph one.</p>
+<p>Intro paragraph two.</p>
+<h2>First section</h2>
+<p>Body one.</p>
+<p>Body two.</p>
+<h2>Second section</h2>
+<p>Body one.</p>
+<p>Body two.</p>
+<h2>Third section</h2>
+<p>Short block.</p>
+<h2>Fourth section</h2>
+<p>Body one.</p>
+<p>Body two.</p>
+<h2>Conclusion</h2>
+<p>Wrap up.</p>
+<h2>FAQ</h2>
+<h3>Question?</h3>
+<p>Answer.</p>
+""",
+    }
+
+    normalized = validator.apply(
+        article,
+        category="seo",
+        keyword="portable charger",
+        rule_context={},
+    )
+    html = normalized["raw_html"]
+
+    assert html.count("<h2>") == 5
+    assert "<h3>Third section</h3>" in html or "<h3>Fourth section</h3>" in html

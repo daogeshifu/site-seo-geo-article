@@ -119,8 +119,8 @@ def test_create_task_and_fetch_result(tmp_path: Path) -> None:
     assert task_payload["article"]["audit"]["score"] > 0
     assert "https://de.ecoflow.com/products/stream-microinverter" in task_payload["article"]["raw_html"]
     raw_html = task_payload["article"]["raw_html"]
-    assert raw_html.index("<h1>") < raw_html.index("<h2>Quick Answer</h2>")
-    assert raw_html.index("<h2>Quick Answer</h2>") < raw_html.index("<h2>References and Evidence to Verify</h2>")
+    assert raw_html.index("<h1>") < raw_html.index("<strong>Quick Answer:</strong>")
+    assert raw_html.index("<strong>Quick Answer:</strong>") < raw_html.index("<h2>References and Evidence to Verify</h2>")
     assert raw_html.index("<h2>References and Evidence to Verify</h2>") < raw_html.index("<h2>FAQ</h2>")
     assert raw_html.index("<h2>FAQ</h2>") < raw_html.index("<h2>Conclusion</h2>")
     assert "<h3>What should I check first about portable charger on plane?</h3>" in raw_html
