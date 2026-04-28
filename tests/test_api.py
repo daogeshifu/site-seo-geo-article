@@ -107,6 +107,7 @@ def test_create_task_and_fetch_result(tmp_path: Path) -> None:
     assert task_payload["access_tier"] == "vip"
     assert task_payload["keyword"] == "portable charger on plane"
     assert task_payload["mode_type"] == 1
+    assert task_payload["provider"] == "openai:gpt-4.1-mini"
     assert task_payload["word_limit"] == 1200
     assert task_payload["task_context"]["country"] == "de"
     assert "watt-hours" in task_payload["task_context"]["ai_qa_content"]
@@ -116,8 +117,14 @@ def test_create_task_and_fetch_result(tmp_path: Path) -> None:
     assert " " not in task_payload["article"]["slug"]
     assert len(task_payload["article"]["slug"]) <= 75
     assert task_payload["article"]["audit"]["score"] > 0
-    assert "added a references and verification section" in task_payload["article"]["audit"]["applied_fixes"]
     assert "https://de.ecoflow.com/products/stream-microinverter" in task_payload["article"]["raw_html"]
+    raw_html = task_payload["article"]["raw_html"]
+    assert raw_html.index("<h1>") < raw_html.index("<h2>Quick Answer</h2>")
+    assert raw_html.index("<h2>Quick Answer</h2>") < raw_html.index("<h2>References and Evidence to Verify</h2>")
+    assert raw_html.index("<h2>References and Evidence to Verify</h2>") < raw_html.index("<h2>FAQ</h2>")
+    assert raw_html.index("<h2>FAQ</h2>") < raw_html.index("<h2>Conclusion</h2>")
+    assert "<h3>What should I check first about portable charger on plane?</h3>" in raw_html
+    assert "<h2>Update log</h2>" not in raw_html
     assert len(task_payload["article"]["images"]) == 3
     assert task_payload["article"]["cover_image"] is not None
     assert len(task_payload["article"]["content_images"]) == 2
@@ -598,6 +605,7 @@ def test_generate_outline_returns_outline_suggestions_and_links(tmp_path: Path) 
 
     data = wait_for_outline_completion(client, bearer, accepted["outline_id"])
     assert data["status"] == "completed"
+    assert data["provider"] == "openai:gpt-4.1-mini"
     assert data["outline"]["generation_mode"] == "mock"
     assert "Quick Answer" in data["outline"]["outline_markdown"]
     assert len(data["outline"]["writing_suggestions"]) >= 3

@@ -6,9 +6,12 @@ from typing import Any
 
 
 H1_RE = re.compile(r"<h1\b", re.IGNORECASE)
+FIRST_H1_RE = re.compile(r"<h1\b[^>]*>.*?</h1>", re.IGNORECASE | re.DOTALL)
 P_RE = re.compile(r"<p>(.*?)</p>", re.IGNORECASE | re.DOTALL)
 FAQ_RE = re.compile(r"<h[23]>\s*FAQ\s*</h[23]>", re.IGNORECASE)
 REFERENCES_RE = re.compile(r"<h[23]>\s*References?(?:\s+and\s+Evidence\s+to\s+Verify)?\s*</h[23]>", re.IGNORECASE)
+CONCLUSION_RE = re.compile(r"<h2>\s*Conclusion\s*</h2>", re.IGNORECASE)
+H2_SECTION_RE = re.compile(r"(<h2\b[^>]*>(.*?)</h2>)(.*?)(?=<h2\b|$)", re.IGNORECASE | re.DOTALL)
 
 
 class ArticleValidator:
@@ -29,6 +32,10 @@ class ArticleValidator:
         html, replacement_hits = self._replace_banned_terms(html, rule_context.get("banned_terms", {}))
         if replacement_hits:
             fixes.extend(replacement_hits)
+
+        html, voice_hits = self._remove_third_party_voice(html)
+        if voice_hits:
+            fixes.extend(voice_hits)
 
         working["title"], title_trimmed = self._trim_text(
             str(working.get("title") or keyword),
@@ -71,6 +78,7 @@ class ArticleValidator:
         html, disclaimer_added = self._ensure_disclaimer(
             html,
             disclaimer=str(rule_context.get("required_disclaimer") or ""),
+            category=category,
         )
         if disclaimer_added:
             fixes.append("added the required disclaimer block")
@@ -83,6 +91,15 @@ class ArticleValidator:
         )
         if references_added:
             fixes.append("added a references and verification section")
+
+        if category == "geo":
+            html, geo_fix_notes = self._normalize_geo_structure(
+                html,
+                keyword=keyword,
+                summary=str((working.get("strategy") or {}).get("answer_first_summary") or ""),
+                disclaimer=str(rule_context.get("required_disclaimer") or ""),
+            )
+            fixes.extend(geo_fix_notes)
 
         h1_count = len(H1_RE.findall(html))
         if h1_count != 1:
@@ -104,15 +121,21 @@ class ArticleValidator:
         if category == "geo":
             quick_answer_present = "Quick Answer" in html
             references_present = bool(REFERENCES_RE.search(html))
+            faq_present = bool(FAQ_RE.search(html))
+            conclusion_present = bool(CONCLUSION_RE.search(html))
+            structure_order_ok = self._geo_structure_order_is_valid(html)
             checks.append(
                 {
                     "name": "geo_structure",
-                    "passed": quick_answer_present and references_present,
-                    "detail": f"quick_answer={quick_answer_present}, references={references_present}",
+                    "passed": quick_answer_present and references_present and faq_present and conclusion_present and structure_order_ok,
+                    "detail": (
+                        f"quick_answer={quick_answer_present}, references={references_present}, faq={faq_present}, "
+                        f"conclusion={conclusion_present}, ordered={structure_order_ok}"
+                    ),
                 }
             )
-            if not quick_answer_present or not references_present:
-                warnings.append("GEO structure is missing either Quick Answer or References")
+            if not (quick_answer_present and references_present and faq_present and conclusion_present and structure_order_ok):
+                warnings.append("GEO structure is missing or out of order for Quick Answer, References, FAQ, or Conclusion")
 
         early_link_required = bool(rule_context.get("requires_shopify_link") and rule_context.get("shopify_url"))
         early_link_present = not early_link_required or self._has_early_link(
@@ -165,10 +188,12 @@ class ArticleValidator:
             return html, False
         if "Quick Answer" in html:
             return html, False
-        first_paragraph = self._first_paragraph_text(html)
-        if keyword.lower() in first_paragraph.lower():
-            return f"{self._quick_answer_block(keyword, summary)}\n{html}", True
-        return f"{self._quick_answer_block(keyword, summary)}\n{html}", True
+        h1_match = FIRST_H1_RE.search(html)
+        block = self._quick_answer_block(keyword, summary)
+        if not h1_match:
+            return f"{block}\n{html}", True
+        insertion_point = h1_match.end()
+        return html[:insertion_point] + "\n" + block + html[insertion_point:], True
 
     def _ensure_early_link(self, html: str, *, shopify_url: str, requires_shopify_link: bool) -> tuple[str, bool]:
         if not requires_shopify_link or not shopify_url:
@@ -184,11 +209,18 @@ class ArticleValidator:
         )
         return html[: first.start()] + snippet + html[first.end() :], True
 
-    def _ensure_disclaimer(self, html: str, *, disclaimer: str) -> tuple[str, bool]:
+    def _ensure_disclaimer(self, html: str, *, disclaimer: str, category: str) -> tuple[str, bool]:
         if not disclaimer:
             return html, False
         if disclaimer in html or "Disclaimer" in html:
             return html, False
+        if category == "geo":
+            conclusion_match = CONCLUSION_RE.search(html)
+            block = f'<p><strong>Disclaimer:</strong> {disclaimer}</p>'
+            if conclusion_match:
+                insert_at = conclusion_match.end()
+                return html[:insert_at] + block + html[insert_at:], True
+            return f"{html}\n{block}", True
         block = f"<h2>Disclaimer</h2><p>{disclaimer}</p>"
         faq_match = FAQ_RE.search(html)
         if faq_match:
@@ -225,13 +257,182 @@ class ArticleValidator:
         paragraphs = list(P_RE.finditer(html))[:2]
         return any(url in match.group(0) for match in paragraphs)
 
+    def _remove_third_party_voice(self, html: str) -> tuple[str, list[str]]:
+        replacements = [
+            (r"(?i)\bAccording to official docs,?\s*", ""),
+            (r"(?i)\bAccording to the official documentation,?\s*", ""),
+            (r"(?i)\bBased on official documentation,?\s*", ""),
+            (r"(?i)\bBased on the official documentation,?\s*", ""),
+            (r"(?i)\bThrough official documentation we can conclude that\s*", ""),
+            (r"(?i)\bThrough the official documentation,? we can conclude that\s*", ""),
+            (r"通过官方文档可以得出[:：]?\s*", ""),
+            (r"根据官方文档可以得出[:：]?\s*", ""),
+        ]
+        updated = html
+        fixes: list[str] = []
+        for pattern, replacement in replacements:
+            next_html, count = re.subn(pattern, replacement, updated)
+            if count:
+                updated = next_html
+                fixes.append(f"removed third-party narrator phrasing matching '{pattern}'")
+        return updated, fixes
+
+    def _normalize_geo_structure(
+        self,
+        html: str,
+        *,
+        keyword: str,
+        summary: str,
+        disclaimer: str,
+    ) -> tuple[str, list[str]]:
+        h1_match = FIRST_H1_RE.search(html)
+        if not h1_match:
+            return html, []
+
+        h1_block = h1_match.group(0).strip()
+        remainder = html[h1_match.end() :]
+        first_h2_match = re.search(r"<h2\b", remainder, re.IGNORECASE)
+        preamble = remainder[: first_h2_match.start()] if first_h2_match else remainder
+        section_source = remainder[first_h2_match.start() :] if first_h2_match else ""
+
+        quick_content = ""
+        references_content = ""
+        faq_content = ""
+        conclusion_content = ""
+        body_sections: list[str] = []
+        fixes: list[str] = []
+
+        for match in H2_SECTION_RE.finditer(section_source):
+            heading_html = match.group(1)
+            heading_text = self._strip_tags(match.group(2)).strip()
+            content = match.group(3).strip()
+            heading_key = re.sub(r"\s+", " ", heading_text.lower())
+
+            if heading_key == "quick answer" or heading_key == "tl;dr":
+                if not quick_content:
+                    quick_content = content
+                fixes.append("normalized the GEO quick-answer section heading")
+                continue
+            if heading_key in {"faq", "update log", "appendix"}:
+                if heading_key == "faq":
+                    if not faq_content:
+                        faq_content = content
+                    fixes.append("normalized the GEO FAQ section heading")
+                else:
+                    fixes.append(f"removed unsupported GEO section '{heading_text}'")
+                continue
+            if "reference" in heading_key or "citation" in heading_key or "evidence to verify" in heading_key:
+                if not references_content:
+                    references_content = content
+                fixes.append("normalized the GEO references section heading")
+                continue
+            if heading_key == "conclusion":
+                if not conclusion_content:
+                    conclusion_content = content
+                fixes.append("normalized the GEO conclusion section heading")
+                continue
+
+            body_sections.append(f"{heading_html}{content}")
+
+        if not quick_content:
+            quick_content = preamble.strip()
+        if not quick_content:
+            quick_content = f"<p>{self._quick_answer_text(keyword, summary)}</p>"
+            fixes.append("added fallback quick-answer content for GEO structure")
+
+        if not references_content:
+            references_content = (
+                "<ul>"
+                "<li>Verify product and policy claims against official source materials before publishing.</li>"
+                "<li>Use the cited AI Q&A sources only when they are actually supported by the final article.</li>"
+                "</ul>"
+            )
+            fixes.append("added fallback references content for GEO structure")
+
+        if not faq_content or not re.search(r"<h3\b", faq_content, re.IGNORECASE):
+            faq_content = self._build_geo_faq_content(keyword)
+            fixes.append("added fallback GEO FAQ content")
+
+        if not body_sections:
+            body_sections.append(
+                f"<h2>Key Details About {keyword}</h2>"
+                "<p>Expand the main answer with verifiable details, decision criteria, and entity-specific facts.</p>"
+            )
+            fixes.append("added a fallback GEO body section")
+
+        if not conclusion_content:
+            conclusion_text = (
+                f"{keyword} works best as GEO content when the page gives the answer first, supports it with verifiable details, "
+                "and closes with a concise takeaway."
+            )
+            conclusion_content = f"<p>{conclusion_text}</p>"
+            fixes.append("added fallback GEO conclusion content")
+
+        if disclaimer and disclaimer not in conclusion_content and "Disclaimer" not in conclusion_content:
+            conclusion_content = f'<p><strong>Disclaimer:</strong> {disclaimer}</p>{conclusion_content}'
+            fixes.append("moved disclaimer into the GEO conclusion section")
+
+        rebuilt = [
+            h1_block,
+            f"<h2>Quick Answer</h2>{self._ensure_wrapped_html(quick_content)}",
+            *[section.strip() for section in body_sections],
+            f"<h2>References and Evidence to Verify</h2>{self._ensure_wrapped_html(references_content)}",
+            f"<h2>FAQ</h2>{self._ensure_wrapped_html(faq_content)}",
+            f"<h2>Conclusion</h2>{self._ensure_wrapped_html(conclusion_content)}",
+        ]
+        return "\n".join(part for part in rebuilt if part).strip(), fixes
+
+    def _geo_structure_order_is_valid(self, html: str) -> bool:
+        h1_match = FIRST_H1_RE.search(html)
+        quick_match = re.search(r"<h2>\s*Quick Answer\s*</h2>", html, re.IGNORECASE)
+        references_match = REFERENCES_RE.search(html)
+        faq_match = FAQ_RE.search(html)
+        conclusion_match = CONCLUSION_RE.search(html)
+        if not (h1_match and quick_match and references_match and faq_match and conclusion_match):
+            return False
+        if not (h1_match.start() < quick_match.start() < references_match.start() < faq_match.start() < conclusion_match.start()):
+            return False
+        tail = html[conclusion_match.end() :].strip()
+        return "<h2" not in tail.lower()
+
     def _quick_answer_block(self, keyword: str, summary: str) -> str:
-        text = summary.strip() or (
+        text = self._quick_answer_text(keyword, summary)
+        return f"<h2>Quick Answer</h2><p>{text}</p>"
+
+    def _quick_answer_text(self, keyword: str, summary: str) -> str:
+        return summary.strip() or (
             f"The short answer is that {keyword} content works best when it provides a direct recommendation first, "
             "then backs it up with verifiable product details, links, and source guidance."
         )
-        return f"<h2>Quick Answer</h2><p>{text}</p>"
 
     def _first_paragraph_text(self, html: str) -> str:
         match = P_RE.search(html)
         return re.sub(r"<[^>]+>", " ", match.group(1)).strip() if match else ""
+
+    def _strip_tags(self, value: str) -> str:
+        return re.sub(r"<[^>]+>", " ", value)
+
+    def _ensure_wrapped_html(self, value: str) -> str:
+        content = value.strip()
+        if not content:
+            return ""
+        if re.match(r"^<(p|ul|ol|h3)\b", content, re.IGNORECASE):
+            return content
+        return f"<p>{content}</p>"
+
+    def _build_geo_faq_content(self, keyword: str) -> str:
+        questions = [
+            (
+                f"What should I check first about {keyword}?",
+                f"Start with the direct answer, then verify the main product, policy, or comparison details that affect {keyword} in real use.",
+            ),
+            (
+                f"How can I tell whether {keyword} is the right fit for my situation?",
+                "Compare the decision criteria that matter most in practice, such as compatibility, limits, setup effort, or ongoing cost.",
+            ),
+            (
+                f"What sources should I verify before acting on advice about {keyword}?",
+                "Check official documentation, current specifications, and any policy or brand statements that support the final recommendation.",
+            ),
+        ]
+        return "".join(f"<h3>{question}</h3><p>{answer}</p>" for question, answer in questions)

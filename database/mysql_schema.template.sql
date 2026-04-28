@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS `article_tasks` (
   `info` TEXT NOT NULL COMMENT 'Brand / product / business context',
   `task_context_json` LONGTEXT NOT NULL COMMENT 'Normalized task context as JSON',
   `language` VARCHAR(32) NOT NULL DEFAULT 'English' COMMENT 'Requested article language',
-  `provider` VARCHAR(32) NOT NULL DEFAULT 'openai' COMMENT 'LLM provider: openai or anthropic',
+  `provider` VARCHAR(128) NOT NULL DEFAULT 'openai' COMMENT 'Resolved execution target, for example azure:gpt-5.4-pro',
   `word_limit` INT UNSIGNED NOT NULL DEFAULT 1200 COMMENT 'Target text length limit (excluding image content)',
   `force_refresh` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Ignore reusable cache when 1',
   `include_cover` TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'Whether to generate a cover image: 0 or 1',

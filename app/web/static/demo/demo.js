@@ -101,6 +101,20 @@ document.addEventListener("DOMContentLoaded", () => {
     return "In progress";
   }
 
+  function formatProvider(provider) {
+    const value = String(provider || "").trim();
+    if (!value) {
+      return "Not specified";
+    }
+    if (value === "anthropic") {
+      return "Anthropic (Claude)";
+    }
+    if (value === "openai") {
+      return "OpenAI";
+    }
+    return value;
+  }
+
   function summarizeTaskKeyword(task) {
     const raw = String(task?.keyword || "").trim();
     if (!raw) {
@@ -202,7 +216,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <div class="recent-task-metrics">
                 <span>ID #${escapeHtml(task.task_id)}</span>
                 <span>${escapeHtml(formatProgress(task))}</span>
-                <span>${escapeHtml(task.provider === "anthropic" ? "Anthropic (Claude)" : "OpenAI (ChatGPT)")}</span>
+                <span>${escapeHtml(formatProvider(task.provider))}</span>
                 <span>${escapeHtml(task.language || "English")}</span>
                 <span>${escapeHtml((task.word_limit || 1200) + " words")}</span>
                 <span>${escapeHtml(formatDate(task.created_at))}</span>

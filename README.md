@@ -234,9 +234,11 @@ docker compose --env-file .env.docker down -v
 | `MAX_WORKERS` | `2` | Async worker count |
 | `LLM_MOCK_MODE` | `true` | Use local mock output instead of real LLM |
 | `AZURE_OPENAI_API_KEY` | empty | Azure OpenAI API key for text generation |
-| `AZURE_OPENAI_RESPONSES_URL` | empty | Full Azure Responses API URL, for example `https://YOUR-RESOURCE.openai.azure.com/openai/responses?api-version=2025-04-01-preview` |
+| `AZURE_OPENAI_RESPONSES_URL` | empty | Azure Responses API base URL, for example `https://YOUR-RESOURCE.openai.azure.com/openai/responses`; legacy URLs with `?api-version=` still work |
 | `AZURE_OPENAI_STANDARD_MODEL` | `gpt-5.4-mini` | Azure deployment name used for `NORMAL_ACCESS_KEY` requests |
-| `AZURE_OPENAI_VIP_MODEL` | `gpt-5.4` | Azure deployment name used for `VIP_ACCESS_KEY` requests |
+| `AZURE_OPENAI_VIP_MODEL` | `gpt-5.4-pro` | Azure deployment name used for `VIP_ACCESS_KEY` requests |
+| `AZURE_OPENAI_STANDARD_API_VERSION` | empty | Optional Azure Responses API version for `NORMAL_ACCESS_KEY`; falls back to the version embedded in `AZURE_OPENAI_RESPONSES_URL` |
+| `AZURE_OPENAI_VIP_API_VERSION` | empty | Optional Azure Responses API version for `VIP_ACCESS_KEY`; falls back to the version embedded in `AZURE_OPENAI_RESPONSES_URL` |
 | `OPENAI_API_KEY` | empty | Optional OpenAI-compatible API key used only when Azure Responses is not configured |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Optional fallback API base URL |
 | `OPENAI_MODEL` | `gpt-4.1-mini` | Optional fallback model name |

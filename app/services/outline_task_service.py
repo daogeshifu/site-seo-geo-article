@@ -42,8 +42,12 @@ class OutlineTaskService:
         normalized_info = info or ""
         normalized_task_context = self.outline_service.rulebook_service.normalize_task_context(task_context)
         normalized_language = (language or "English").strip() or "English"
-        normalized_provider = (provider or "openai").strip().lower() or "openai"
+        requested_provider = (provider or "openai").strip().lower() or "openai"
         normalized_access_tier = (access_tier or "standard").strip().lower() or "standard"
+        normalized_provider = self.outline_service.llm_client.resolve_execution_provider(
+            requested_provider,
+            normalized_access_tier,
+        )
 
         if not normalized_keyword:
             raise ValueError("A keyword is required.")

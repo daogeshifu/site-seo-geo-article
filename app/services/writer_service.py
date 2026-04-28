@@ -70,6 +70,8 @@ class WriterService:
                 provider=provider,
             )
             strategy = extract_json_object(raw_strategy)
+            if category == "geo":
+                strategy = self._normalize_geo_strategy(strategy, keyword)
 
             draft_prompt = build_draft_prompt(
                 category,
@@ -297,12 +299,13 @@ class WriterService:
                     "internal_link_plan": rule_context.get("resolved_internal_links", []),
                 }
             else:
+                geo_faq_questions = self._fallback_geo_faq_questions(h1_title)
                 strategy = {
                     "search_intent": "outline-driven answer content",
                     "audience": "readers expecting a concise answer that follows the supplied outline",
                     "meta_title": truncate(h1_title, int(rule_context["meta_title_limit"])),
                     "meta_description": truncate(
-                        f"Outline-based GEO article for {h1_title} that follows the supplied structure closely.",
+                        f"Outline-based GEO article for {h1_title} with a quick answer, proof-focused body sections, references, and conclusion.",
                         int(rule_context["meta_description_limit"]),
                     ),
                     "answer_first_summary": f"The short answer to {h1_title} should stay consistent with the supplied outline.",
@@ -310,11 +313,11 @@ class WriterService:
                     "h1_options": [h1_title],
                     "outline": outline,
                     "claim_blocks": [],
-                    "faq_questions": faq_questions,
+                    "faq_questions": geo_faq_questions,
                     "reference_plan": ["Use official or verifiable sources that match the supplied outline"],
                     "internal_link_plan": rule_context.get("resolved_internal_links", []),
                     "compliance_notes": rule_context.get("required_notes", []),
-                    "schema_suggestions": ["Article", "FAQPage"],
+                    "schema_suggestions": ["Article"],
                     "trust_signals": ["author byline", "publish date", "last updated", "references"],
                     "image_briefs": [f"Editorial image for {h1_title}"],
                 }
@@ -352,6 +355,14 @@ class WriterService:
                     )
                     html_parts.append(
                         "<p>Support the key claims here with source types, product facts, or policy references that match this outline section.</p>"
+                    )
+
+            if category == "geo":
+                html_parts.append("<h2>FAQ</h2>")
+                for question in geo_faq_questions:
+                    html_parts.append(f"<h3>{question}</h3>")
+                    html_parts.append(
+                        "<p>Answer this question in a practical way, using the keyword context, the main decision factors, and any verifiable constraints that matter to readers.</p>"
                     )
 
             return self._package_article(
@@ -438,20 +449,17 @@ class WriterService:
                 "audience": "readers who want a fast answer plus proof they can trust",
                 "meta_title": truncate(f"{keyword} GEO Answer Template", int(rule_context["meta_title_limit"])),
                 "meta_description": truncate(
-                    f"Use this GEO-ready article structure for {keyword} with answer-first summaries, proof blocks, references, and FAQ sections.",
+                    f"Use this GEO-ready article structure for {keyword} with a quick answer, body sections, references, and conclusion.",
                     int(rule_context["meta_description_limit"]),
                 ),
                 "answer_first_summary": f"The short answer to {keyword} should appear immediately, followed by proof and references.",
                 "entity_summary": brand_line,
                 "h1_options": [f"{keyword}: A GEO-Ready Answer Page"],
                 "outline": [
-                    {"level": "H2", "title": "TL;DR"},
-                    {"level": "H2", "title": f"The direct answer to {keyword}"},
+                    {"level": "H2", "title": f"What matters most about {keyword}"},
                     {"level": "H2", "title": "Proof points and entity context"},
-                    {"level": "H2", "title": "References and citation plan"},
-                    {"level": "H2", "title": "Update log"},
+                    {"level": "H3", "title": "Evidence readers should verify"},
                     {"level": "H2", "title": "Conclusion"},
-                    {"level": "H2", "title": "FAQ"},
                 ],
                 "claim_blocks": [
                     {
@@ -460,19 +468,15 @@ class WriterService:
                         "citation_hint": "Reference benchmark studies, documentation, or policy pages",
                     }
                 ],
-                "faq_questions": [
-                    f"What is the fastest answer to {keyword}?",
-                    f"How should {keyword} be cited in AI search results?",
-                    "What proof makes the article more trustworthy?",
-                ],
+                "faq_questions": self._fallback_geo_faq_questions(keyword),
                 "reference_plan": [
                     "Manufacturer specifications, docs, or official product pages",
                     "Policy pages, benchmark reports, or research-backed explainers",
                 ],
                 "internal_link_plan": rule_context.get("resolved_internal_links", []),
                 "compliance_notes": rule_context.get("required_notes", []),
-                "schema_suggestions": ["Article", "FAQPage"],
-                "trust_signals": ["author byline", "publish date", "last updated", "references", "TL;DR"],
+                "schema_suggestions": ["Article"],
+                "trust_signals": ["author byline", "publish date", "last updated", "references"],
                 "image_briefs": [
                     f"Editorial hero image for {keyword}",
                     "Visual showing proof blocks and evidence structure",
@@ -483,7 +487,7 @@ class WriterService:
 <h2>Quick Answer</h2>
 <p>{strategy["answer_first_summary"]}</p>
 <p>Readers who want the official version can review the {internal_link} before diving into the supporting explanation.</p>
-<h2>The direct answer to {keyword}</h2>
+<h2>What matters most about {keyword}</h2>
 <p>If the page is meant to perform in AI-driven discovery, the introduction should answer the core question first. Readers and systems alike should understand the conclusion without needing to scroll through a long setup section.</p>
 <p>That opening answer should stay consistent with the rest of the page. If brand or product claims appear later, they should reinforce the same entity story instead of introducing a new angle halfway through the article.</p>
 <h2>Proof points and entity context</h2>
@@ -494,20 +498,20 @@ class WriterService:
   <li><strong>Proof blocks:</strong> pair claims with evidence hints and source categories.</li>
   <li><strong>Entity clarity:</strong> keep product names, descriptors, and positioning consistent.</li>
 </ul>
-<h2>References and citation plan</h2>
+<h3>Evidence readers should verify</h3>
+<p>Use specific evidence categories that match the claim, such as specifications, benchmark data, policy pages, or implementation notes.</p>
+<h2>References and Evidence to Verify</h2>
 <p>Instead of inventing links, define the reference categories the final article should cite. Official product documentation, trusted third-party benchmarks, regulatory pages, and policy explainers are usually stronger than generic blog commentary.</p>
-<p>This is also where inline citations, quote-ready facts, and clearly labeled updates can improve extraction quality.</p>
-<h2>Update log</h2>
-<p>Add visible freshness signals when the article is published. A publish date, a last-updated date, and a short note describing what changed can make the page easier to trust.</p>
+<p>This is also where inline citations, quote-ready facts, and clearly labeled verification notes can improve extraction quality.</p>
+<h2>FAQ</h2>
+<h3>{strategy["faq_questions"][0]}</h3>
+<p>Start with the most practical factor that changes the answer, then explain the evidence or product detail the reader should verify.</p>
+<h3>{strategy["faq_questions"][1]}</h3>
+<p>Compare the criteria that matter in real use, such as compatibility, limits, setup effort, or long-term value.</p>
+<h3>{strategy["faq_questions"][2]}</h3>
+<p>Point readers to the official documents, specifications, or policy pages that confirm the final recommendation.</p>
 <h2>Conclusion</h2>
 <p>{keyword} pages work best when they are direct, evidence-backed, and consistent about the entities they discuss. Use this draft as the structure, then replace the placeholder proof guidance with verified citations before publishing.</p>
-<h2>FAQ</h2>
-<h3>What is the fastest answer to {keyword}?</h3>
-<p>Give the short answer in the first screen, then expand with evidence and context.</p>
-<h3>How should {keyword} be cited in AI search results?</h3>
-<p>Use clear headings, compact paragraphs, and evidence-backed statements that can be quoted easily.</p>
-<h3>What proof makes the article more trustworthy?</h3>
-<p>Official specs, policy pages, benchmark data, and consistent entity descriptions usually help most.</p>
 """.strip()
 
         return self._package_article(
@@ -557,6 +561,57 @@ class WriterService:
             title = outline[0]["title"]
 
         return title, outline
+
+    def _normalize_geo_strategy(self, strategy: dict[str, Any], keyword: str) -> dict[str, Any]:
+        normalized = deepcopy(strategy)
+        raw_outline = normalized.get("outline") if isinstance(normalized.get("outline"), list) else []
+        filtered_outline: list[dict[str, str]] = []
+
+        for item in raw_outline:
+            if not isinstance(item, dict):
+                continue
+            level = str(item.get("level") or "").upper()
+            title = str(item.get("title") or "").strip()
+            if not title or level not in {"H2", "H3"}:
+                continue
+
+            title_key = re.sub(r"\s+", " ", title.lower())
+            if title_key in {"quick answer", "tl;dr", "conclusion", "faq", "update log", "appendix"}:
+                continue
+            if "reference" in title_key or "citation" in title_key or "evidence to verify" in title_key:
+                continue
+            filtered_outline.append({"level": level, "title": title})
+
+        if not filtered_outline:
+            filtered_outline = [
+                {"level": "H2", "title": f"What matters most about {keyword}"},
+                {"level": "H2", "title": "Proof points and entity context"},
+                {"level": "H3", "title": "Evidence readers should verify"},
+            ]
+
+        normalized["outline"] = filtered_outline
+        normalized["schema_suggestions"] = ["Article"]
+        normalized["trust_signals"] = [
+            "author byline",
+            "publish date",
+            "last updated",
+            "references",
+        ]
+        faq_questions = normalized.get("faq_questions") if isinstance(normalized.get("faq_questions"), list) else []
+        cleaned_questions = [
+            str(item).strip()
+            for item in faq_questions
+            if str(item).strip()
+        ]
+        normalized["faq_questions"] = cleaned_questions[:4] or self._fallback_geo_faq_questions(keyword)
+        return normalized
+
+    def _fallback_geo_faq_questions(self, keyword: str) -> list[str]:
+        return [
+            f"What should I check first about {keyword}?",
+            f"How can I tell whether {keyword} is the right fit for my situation?",
+            f"What sources should I verify before acting on advice about {keyword}?",
+        ]
 
     def _attach_images(
         self,

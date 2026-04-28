@@ -49,9 +49,13 @@ class TaskService:
         normalized_language = (language or "English").strip() or "English"
         normalized_info = info or ""
         normalized_task_context = task_context or {}
-        normalized_provider = (provider or "openai").strip().lower() or "openai"
+        requested_provider = (provider or "openai").strip().lower() or "openai"
         normalized_word_limit = max(200, min(10000, int(word_limit)))
         normalized_access_tier = (access_tier or "standard").strip().lower() or "standard"
+        normalized_provider = self.writer_service.llm_client.resolve_execution_provider(
+            requested_provider,
+            normalized_access_tier,
+        )
 
         if not normalized_keyword:
             raise ValueError("A keyword is required.")

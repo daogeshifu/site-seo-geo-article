@@ -643,13 +643,31 @@ class MySQLTaskRepository:
                     cursor.execute(
                         f"""
                         ALTER TABLE {TASK_TABLE}
-                        ADD COLUMN provider VARCHAR(32) NOT NULL DEFAULT 'openai'
-                        COMMENT 'LLM provider: openai or anthropic'
+                        ADD COLUMN provider VARCHAR(128) NOT NULL DEFAULT 'openai'
+                        COMMENT 'Resolved execution target, for example azure:gpt-5.4-pro'
                         AFTER language
                         """
                     )
 
             self._run_with_retry(_add_provider)
+        else:
+            provider_metadata = self._run_with_retry(lambda conn: _column_metadata(conn, "provider"))
+            provider_data_type = str((provider_metadata or {}).get("DATA_TYPE") or "").lower()
+            provider_max_length = (provider_metadata or {}).get("CHARACTER_MAXIMUM_LENGTH")
+            if provider_data_type in {"varchar", "char"} and _as_int(provider_max_length, 0) < 64:
+                logger.warning("MySQL column `%s.provider` is too short; expanding it automatically.", TASK_TABLE)
+
+                def _expand_provider_column(connection: Any) -> None:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            f"""
+                            ALTER TABLE {TASK_TABLE}
+                            MODIFY COLUMN provider VARCHAR(128) NOT NULL DEFAULT 'openai'
+                            COMMENT 'Resolved execution target, for example azure:gpt-5.4-pro'
+                            """
+                        )
+
+                self._run_with_retry(_expand_provider_column)
 
         if not self._run_with_retry(lambda conn: _column_exists(conn, "task_context_json")):
             logger.warning("MySQL column `%s.task_context_json` is missing; adding it automatically.", TASK_TABLE)

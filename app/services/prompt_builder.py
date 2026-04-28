@@ -171,26 +171,38 @@ def build_strategy_prompt(
             {{"label": "", "placement": "", "url_hint": ""}}
           ],
           "compliance_notes": ["", ""],
-          "schema_suggestions": ["Article", "FAQPage"],
-          "trust_signals": ["author byline", "publish date", "last updated", "references", "TL;DR"]
+          "schema_suggestions": ["Article"],
+          "trust_signals": ["author byline", "publish date", "last updated", "references"]
         }}
 
         Requirements:
         - All output must be written in {language}
+        - Titles, section headings, anchor text, and body content must all use {language}
         - Optimize for GEO / AI citation readiness:
           1. answer-first structure
           2. high information density
-          3. FAQ and extractable headings
+          3. extractable headings
           4. references and inline citation opportunities
           5. quantified proof blocks
           6. clear entity alignment between the topic and brand/product info
-          7. TL;DR and update-log friendly structure
+          7. direct, neutral, first-party explanatory tone
+        - The final article structure is fixed:
+          1. one H1 title
+          2. one H2 named Quick Answer
+          3. one or more body H2 sections with optional H3 subsections
+          4. one H2 named References and Evidence to Verify
+          5. one H2 named FAQ
+          6. one H2 named Conclusion
+        - The outline field must describe body sections only
+        - FAQ questions must be practical, natural, and closely related to the keyword and the questions readers would ask in daily decision-making
+        - Do not plan or mention TL;DR, update log, appendix, or extra top-level sections outside the fixed structure
         - Headings should mirror user questions and retrieval intents
         - Do not invent external sources; describe the type of evidence needed
         - If AI Q&A reference answer or adopted source links are provided in rule context, use them as GEO research input and cite/link only the provided source URLs when appropriate
         - Meta title should stay within 60 characters
         - Meta description should stay within 160 characters
         - If internal links are required, plan them near the top of the article
+        - Avoid third-party narrator phrasing such as "According to official docs" or "through official documentation we can conclude"
         {mode_requirements}
         """
     ).strip()
@@ -279,19 +291,27 @@ def build_draft_prompt(
         Requirements:
         - Return pure HTML only
         - Use h1, h2, h3, p, ul, li, strong, a tags only
-        - Structure should prioritize:
-          1. H1
-          2. TL;DR / answer-first intro
-          3. clear proof-oriented H2/H3 blocks
-          4. references / evidence guidance
-          5. conclusion
-          6. FAQ
+        - All visible text, including the H1 title, all headings, paragraph text, list text, and anchor text, must be written in {language}
+        - The final structure must be exactly:
+          1. one H1 title
+          2. one H2 with the exact text Quick Answer, followed by 1-2 short paragraphs
+          3. one or more body H2 sections with optional H3 subsections
+          4. one H2 with the exact text References and Evidence to Verify
+          5. one H2 with the exact text FAQ
+          6. one H2 with the exact text Conclusion
+        - References and Evidence to Verify must appear immediately before FAQ
+        - FAQ must appear immediately before Conclusion
+        - FAQ must contain 2-4 H3 questions, and each question must be a realistic user question related to {keyword}
+        - Each FAQ question must be followed by one concise answer paragraph
+        - Conclusion must be the final H2 section
+        - Do not add TL;DR, update log, appendix, or any extra top-level section outside the fixed structure
         - Target approximately {word_limit} words/characters of textual content (excluding any image content)
         - Use short, extractable paragraphs
         - Make headings easy for AI systems to quote or summarize
         - Mention citations, proof, benchmark data, or source types without inventing fake source URLs
         - Use AI Q&A reference answer and adopted source links from rule context as GEO reference material when provided
         - If brand/product info is provided, keep entity mentions consistent and verifiable
+        - Use direct explanatory voice. Do not write in a third-party narrator tone such as "According to official docs", "Based on official documentation", or "through official documentation we can conclude"
         - Respect all compliance notes, disclaimers, and compatibility constraints from the rule context
         {mode_requirements}
         """
@@ -310,7 +330,7 @@ def build_polish_prompt(
     flavor = (
         "Improve naturalness, specificity, and SEO readability."
         if category == "seo"
-        else "Improve citability, answer extraction, and trust signals."
+        else "Improve citability, answer extraction, trust signals, and structural consistency."
     )
     rule_brief = _build_rule_brief(rule_context or {})
     normalized_mode_type = _normalize_mode_type(mode_type)
@@ -319,9 +339,34 @@ def build_polish_prompt(
         if normalized_mode_type == MODE_TYPE_KEYWORD
         else "Keep the article aligned to the supplied outline and preserve the heading wording intent"
     )
+    structure_requirement = (
+        "- Keep the existing HTML structure intact"
+        if category == "seo"
+        else "- Keep the existing structure and section order unless there is an obvious structural problem that must be repaired"
+    )
     mode_requirement = (
         "- mode_type=2: keep the exact heading structure, order, and section boundaries from the current HTML"
         if normalized_mode_type == MODE_TYPE_OUTLINE
+        else ""
+    )
+    geo_requirements = (
+        """
+        - For GEO articles, the final structure must be exactly:
+          1. one H1 title
+          2. one H2 named Quick Answer
+          3. one or more body H2 sections with optional H3 subsections
+          4. one H2 named References and Evidence to Verify
+          5. one H2 named FAQ
+          6. one H2 named Conclusion as the final section
+        - FAQ must stay immediately before Conclusion and contain 2-4 natural user questions related to the target keyword
+        - Keep all headings and visible text in the requested language
+        - Unless the article has a clear structural problem, do not add, remove, reorder, or rename sections
+        - Default to polishing wording, headings, clarity, and fluency rather than restructuring
+        - Remove AI-sounding phrasing, generic filler, and robotic repetition so the article reads like it was written by a human writer
+        - Remove third-party narrator phrasing such as "According to official docs", "Based on official documentation", "through official documentation we can conclude", or "通过官方文档可以得出"
+        - State conclusions directly, then place source guidance in the references section
+        """
+        if category == "geo"
         else ""
     )
     return dedent(
@@ -331,13 +376,14 @@ def build_polish_prompt(
 
         Goals:
         - {flavor}
-        - Keep the existing HTML structure intact
+        - {structure_requirement.removeprefix("- ")}
         - Do not change the core meaning
         - Keep the article in {language}
         - {topic_requirement}
         - Keep textual content close to {word_limit} words/characters (excluding image content)
         - Keep compliance with the following rule context:
         {rule_brief}
+        {geo_requirements}
         {mode_requirement}
         - Return HTML only
 

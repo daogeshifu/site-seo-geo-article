@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import parse_qsl, urlsplit
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -34,7 +35,9 @@ class Settings:
     azure_openai_api_key: str = ""
     azure_openai_responses_url: str = ""
     azure_openai_standard_model: str = "gpt-5.4-mini"
-    azure_openai_vip_model: str = "gpt-5.4"
+    azure_openai_vip_model: str = "gpt-5.4-pro"
+    azure_openai_standard_api_version: str = ""
+    azure_openai_vip_api_version: str = ""
     azure_image_api_url: str = ""
     azure_image_api_key: str = ""
     azure_image_endpoint: str = ""
@@ -103,7 +106,15 @@ class Settings:
             azure_openai_api_key=os.getenv("AZURE_OPENAI_API_KEY", "").strip(),
             azure_openai_responses_url=os.getenv("AZURE_OPENAI_RESPONSES_URL", "").strip(),
             azure_openai_standard_model=os.getenv("AZURE_OPENAI_STANDARD_MODEL", "gpt-5.4-mini").strip(),
-            azure_openai_vip_model=os.getenv("AZURE_OPENAI_VIP_MODEL", "gpt-5.4").strip(),
+            azure_openai_vip_model=os.getenv("AZURE_OPENAI_VIP_MODEL", "gpt-5.4-pro").strip(),
+            azure_openai_standard_api_version=_azure_api_version_from_env(
+                "AZURE_OPENAI_STANDARD_API_VERSION",
+                os.getenv("AZURE_OPENAI_RESPONSES_URL", "").strip(),
+            ),
+            azure_openai_vip_api_version=_azure_api_version_from_env(
+                "AZURE_OPENAI_VIP_API_VERSION",
+                os.getenv("AZURE_OPENAI_RESPONSES_URL", "").strip(),
+            ),
             azure_image_api_url=os.getenv("AZURE_IMAGE_API_URL", "").strip(),
             azure_image_api_key=os.getenv("AZURE_IMAGE_API_KEY", "").strip(),
             azure_image_endpoint=os.getenv("AZURE_IMAGE_ENDPOINT", "").strip().rstrip("/"),
@@ -145,3 +156,13 @@ class Settings:
             mysql_pool_size=max(1, int(os.getenv("MYSQL_POOL_SIZE", "8"))),
             mysql_fallback_to_memory=_env_bool("MYSQL_FALLBACK_TO_MEMORY", False),
         )
+
+
+def _azure_api_version_from_env(name: str, legacy_url: str) -> str:
+    explicit = os.getenv(name, "").strip()
+    if explicit:
+        return explicit
+    if not legacy_url:
+        return ""
+    query = dict(parse_qsl(urlsplit(legacy_url).query, keep_blank_values=True))
+    return str(query.get("api-version") or "").strip()

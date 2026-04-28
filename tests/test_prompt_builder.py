@@ -70,6 +70,35 @@ def test_geo_prompts_include_ai_qa_reference_fields() -> None:
     assert "https://example.com/ai-cited-source" in draft_prompt
 
 
+def test_geo_prompts_enforce_fixed_structure_and_direct_voice() -> None:
+    strategy_prompt = build_strategy_prompt(
+        "geo",
+        "best home battery app",
+        "Brand: VoltGo",
+        "German",
+        {},
+    )
+    draft_prompt = build_draft_prompt(
+        "geo",
+        "best home battery app",
+        "Brand: VoltGo",
+        "German",
+        {"h1_options": ["Beste Heimbatterie-App"]},
+        {},
+    )
+    polish_prompt = build_polish_prompt("geo", "German", "best home battery app", "<h1>demo</h1>", {}, 1200)
+
+    assert "Titles, section headings, anchor text, and body content must all use German" in strategy_prompt
+    assert "FAQ questions must be practical, natural, and closely related to the keyword" in strategy_prompt
+    assert "The final structure must be exactly" in draft_prompt
+    assert "References and Evidence to Verify must appear immediately before FAQ" in draft_prompt
+    assert "FAQ must appear immediately before Conclusion" in draft_prompt
+    assert 'Do not write in a third-party narrator tone such as "According to official docs"' in draft_prompt
+    assert "Remove third-party narrator phrasing" in polish_prompt
+    assert "one H2 named FAQ" in polish_prompt
+    assert "Unless the article has a clear structural problem, do not add, remove, reorder, or rename sections" in polish_prompt
+
+
 def test_outline_prompt_includes_ai_qa_reference_fields() -> None:
     service = OutlineService(LLMClient(Settings(llm_mock_mode=True)))
     prompt = service._build_prompt(
