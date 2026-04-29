@@ -23,6 +23,23 @@ def _body_structure_limits(word_limit: int) -> dict[str, int]:
     return {"max_h2": 5, "max_h3": 5, "faq_count": 4}
 
 
+def _word_count_instructions(word_limit: int, limits: dict[str, int]) -> tuple[str, str]:
+    """Return (draft_instruction, polish_instruction) for word count enforcement."""
+    floor = int(word_limit * 0.95)
+    per_section = max(80, word_limit // (limits["max_h2"] + 2))
+    draft = (
+        f"You must write at least {floor} words of textual content. "
+        f"The target is {word_limit} words — do not stop early. "
+        f"Each body H2 section must contain at least {per_section} words; "
+        "if a section feels thin, expand it with concrete examples, supporting evidence, or practical detail."
+    )
+    polish = (
+        f"Keep textual content at or above {floor} words (target {word_limit}). "
+        "Do not shorten or compress existing paragraphs — if any section is thin, expand it with concrete detail."
+    )
+    return draft, polish
+
+
 def _build_rule_brief(rule_context: dict[str, Any]) -> str:
     context = rule_context.get("context", {})
     notes = [
@@ -241,6 +258,7 @@ def build_draft_prompt(
     rule_brief = _build_rule_brief(rule_context or {})
     normalized_mode_type = _normalize_mode_type(mode_type)
     limits = _body_structure_limits(word_limit)
+    draft_word_instruction, _polish_word_instruction = _word_count_instructions(word_limit, limits)
     content_context = (
         f"""
             Outline from keyword field:
@@ -286,7 +304,7 @@ def build_draft_prompt(
               3. H2/H3 body sections
               4. conclusion
               5. FAQ section with {limits["faq_count"]} natural follow-up questions
-            - Target approximately {word_limit} words/characters of textual content (excluding any image content)
+            - {draft_word_instruction}
             - For this target length, use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections in total
             - Only use H3 when it materially improves clarity; do not add H3 by default
             - Each body H2 section should contain at least two meaningful content blocks, usually two paragraphs or one paragraph plus one list
@@ -332,7 +350,7 @@ def build_draft_prompt(
         - Each FAQ question must be followed by one concise answer paragraph
         - Conclusion must be the final H2 section
         - Do not add TL;DR, update log, appendix, or any extra top-level section outside the fixed structure
-        - Target approximately {word_limit} words/characters of textual content (excluding any image content)
+        - {draft_word_instruction}
         - Use short, extractable paragraphs
         - Make headings easy for AI systems to quote or summarize
         - Mention citations, proof, benchmark data, or source types without inventing fake source URLs
@@ -397,6 +415,7 @@ def build_polish_prompt(
         else ""
     )
     density_notes = _body_structure_limits(word_limit)
+    _draft_word_instruction, polish_word_instruction = _word_count_instructions(word_limit, density_notes)
     return dedent(
         f"""
         You are an expert editor.
@@ -408,7 +427,7 @@ def build_polish_prompt(
         - Do not change the core meaning
         - Keep the article in {language}
         - {topic_requirement}
-        - Keep textual content close to {word_limit} words/characters (excluding image content)
+        - {polish_word_instruction}
         - For this target length, keep the body within {density_notes["max_h2"]} H2 sections and {density_notes["max_h3"]} H3 subsections total whenever possible
         - If the draft already fits the structure, avoid adding new headings; strengthen the existing wording instead
         - Keep compliance with the following rule context:
