@@ -4,9 +4,11 @@ import re
 from datetime import datetime
 from html.parser import HTMLParser
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 from docx import Document
+from docx.shared import Inches
 
 
 def _normalize_text(value: str) -> str:
@@ -69,6 +71,11 @@ class _HTMLBlockParser(HTMLParser):
 
 
 class DocExportService:
+    _SUPPORTED_MIME = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
+
+    def __init__(self, image_dir: Path | None = None) -> None:
+        self.image_dir = image_dir
+
     def build_docx(self, task: dict[str, Any]) -> tuple[bytes, str]:
         article = task.get("article") or {}
         title = str(article.get("title") or task.get("keyword") or "Article").strip() or "Article"
@@ -78,7 +85,8 @@ class DocExportService:
         document = Document()
         self._add_meta(document, task, article)
         document.add_paragraph("")
-        self._add_article_body(document, article)
+        images = self._resolve_images(article)
+        self._add_article_body(document, article, images)
 
         buffer = BytesIO()
         document.save(buffer)
@@ -98,9 +106,42 @@ class DocExportService:
             label_run.bold = True
             paragraph.add_run(value)
 
-    def _add_article_body(self, document: Document, article: dict[str, Any]) -> None:
+    def _resolve_images(self, article: dict[str, Any]) -> dict[str, list[Path]]:
+        if not self.image_dir:
+            return {"cover": [], "content": []}
+        cover: list[Path] = []
+        content: list[Path] = []
+        for asset in article.get("images") or []:
+            namespace = asset.get("asset_namespace")
+            filename = asset.get("filename")
+            mime_type = asset.get("mime_type", "")
+            role = asset.get("role", "")
+            if not namespace or not filename or mime_type not in self._SUPPORTED_MIME:
+                continue
+            path = self.image_dir / namespace / filename
+            if not path.exists():
+                continue
+            if role == "cover":
+                cover.append(path)
+            elif role == "content":
+                content.append(path)
+        return {"cover": cover, "content": content}
+
+    def _insert_image(self, document: Document, path: Path) -> None:
+        try:
+            document.add_picture(str(path), width=Inches(6))
+        except Exception:
+            pass
+
+    def _add_article_body(self, document: Document, article: dict[str, Any], images: dict[str, list[Path]]) -> None:
         parser = _HTMLBlockParser()
         parser.feed(str(article.get("raw_html") or article.get("html") or ""))
+
+        cover_image = next(iter(images.get("cover") or []), None)
+        content_images = list(images.get("content") or [])
+        cover_inserted = False
+        content_img_index = 0
+        h2_count = 0
 
         for block in parser.blocks:
             block_text = _normalize_text("".join(segment["text"] for segment in block["segments"]))
@@ -110,6 +151,10 @@ class DocExportService:
             if block["tag"] == "h1":
                 paragraph = document.add_paragraph(style="Heading 1")
             elif block["tag"] == "h2":
+                h2_count += 1
+                if h2_count >= 2 and content_img_index < len(content_images):
+                    self._insert_image(document, content_images[content_img_index])
+                    content_img_index += 1
                 paragraph = document.add_paragraph(style="Heading 2")
             elif block["tag"] == "h3":
                 paragraph = document.add_paragraph(style="Heading 3")
@@ -125,3 +170,11 @@ class DocExportService:
                 run = paragraph.add_run(text)
                 if segment["bold"]:
                     run.bold = True
+
+            if block["tag"] == "h1" and not cover_inserted and cover_image:
+                self._insert_image(document, cover_image)
+                cover_inserted = True
+
+        while content_img_index < len(content_images):
+            self._insert_image(document, content_images[content_img_index])
+            content_img_index += 1
