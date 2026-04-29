@@ -25,17 +25,21 @@ def _body_structure_limits(word_limit: int) -> dict[str, int]:
 
 def _word_count_instructions(word_limit: int, limits: dict[str, int]) -> tuple[str, str]:
     """Return (draft_instruction, polish_instruction) for word count enforcement."""
-    floor = int(word_limit * 0.95)
-    per_section = max(80, word_limit // (limits["max_h2"] + 2))
+    floor = int(word_limit * 0.90)
+    ceiling = int(word_limit * 1.10)
+    total_parts = limits["max_h2"] + 4
+    per_section = max(80, word_limit // total_parts)
     draft = (
-        f"You must write at least {floor} words of textual content. "
-        f"The target is {word_limit} words — do not stop early. "
-        f"Each body H2 section must contain at least {per_section} words; "
-        "if a section feels thin, expand it with concrete examples, supporting evidence, or practical detail."
+        f"The entire article — every section combined including intro, all H2/H3 body sections, FAQ, references, and conclusion — "
+        f"must total between {floor} and {ceiling} words. "
+        f"Each individual section should aim for around {per_section} words; do not write more than {per_section + 40} words per section. "
+        f"Stop adding content once the running total approaches {ceiling} words."
     )
     polish = (
-        f"Keep textual content at or above {floor} words (target {word_limit}). "
-        "Do not shorten or compress existing paragraphs — if any section is thin, expand it with concrete detail."
+        f"The entire article must total between {floor} and {ceiling} words. "
+        f"Count ALL sections: intro, body H2s, H3s, FAQ, references, and conclusion. "
+        f"If the total exceeds {ceiling} words, shorten the longest sections first. "
+        f"Do not expand any section unless the total is clearly under {floor} words."
     )
     return draft, polish
 
@@ -160,9 +164,10 @@ def build_strategy_prompt(
               5. FAQ should contain {limits["faq_count"]} natural follow-up questions for this target length
               6. Titles should reflect the core topic naturally
             - Outline should target approximately {word_limit} words/characters of textual content
-            - For this target length, use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections in total
+            - HARD LIMIT: the outline must contain no more than {limits["max_h2"]} body H2 sections — combine related subtopics into fewer sections rather than adding more H2s
+            - HARD LIMIT: use no more than {limits["max_h3"]} body H3 subsections in total
             - Only use H3 when it materially improves clarity; do not add H3 by default
-            - Each body H2 section should carry enough substance for at least two meaningful paragraphs or one paragraph plus one list block
+            - Each body H2 section should be concise — plan for one to two short paragraphs per section, not multi-paragraph deep dives
             - Headings should be specific, benefit-driven, and not generic
             - Link opportunities should describe relevant anchor ideas and use provided URLs only when available
             - Internal link plan should call out the best early-link placement when rule context requires it
@@ -227,9 +232,10 @@ def build_strategy_prompt(
           5. one H2 named FAQ
           6. one H2 named Conclusion
         - The outline field must describe body sections only
-        - For this target length, use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections in total
+        - HARD LIMIT: the outline must contain no more than {limits["max_h2"]} body H2 sections — combine related subtopics into fewer sections rather than adding more H2s
+        - HARD LIMIT: use no more than {limits["max_h3"]} body H3 subsections in total
         - Only use H3 when it materially improves clarity; do not add H3 by default
-        - Each body H2 section should carry enough substance for at least two meaningful paragraphs or one paragraph plus one list block
+        - Each body H2 section should be concise — plan for one to two short paragraphs per section, not multi-paragraph deep dives
         - FAQ questions must be practical, natural, and closely related to the keyword and the questions readers would ask in daily decision-making
         - FAQ should contain {limits["faq_count"]} natural user questions for this target length
         - Do not plan or mention TL;DR, update log, appendix, or extra top-level sections outside the fixed structure
@@ -305,9 +311,10 @@ def build_draft_prompt(
               4. conclusion
               5. FAQ section with {limits["faq_count"]} natural follow-up questions
             - {draft_word_instruction}
-            - For this target length, use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections in total
+            - HARD LIMIT: use exactly {limits["max_h2"]} body H2 sections maximum — do not add more H2 sections even if the topic seems to warrant it
+            - HARD LIMIT: use at most {limits["max_h3"]} H3 subsections total across the entire article
             - Only use H3 when it materially improves clarity; do not add H3 by default
-            - Each body H2 section should contain at least two meaningful content blocks, usually two paragraphs or one paragraph plus one list
+            - Each body H2 section should contain at most two short paragraphs; avoid long multi-paragraph sections
             - When mode_type=1, keep the main keyword naturally present in H1, intro, and conclusion
             - Paragraphs should stay compact and readable
             - When mode_type=1, use long-tail keywords naturally and never stuff them
@@ -343,9 +350,10 @@ def build_draft_prompt(
           6. one H2 with the exact text Conclusion
         - References and Evidence to Verify must appear immediately before FAQ
         - FAQ must appear immediately before Conclusion
-        - For this target length, use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections in total
+        - HARD LIMIT: use exactly {limits["max_h2"]} body H2 sections maximum — do not add extra H2 sections beyond this count
+        - HARD LIMIT: use at most {limits["max_h3"]} H3 subsections total across the entire article
         - Only use H3 when it materially improves clarity; do not add H3 by default
-        - Each body H2 section should contain at least two meaningful content blocks, usually two paragraphs or one paragraph plus one list
+        - Each body H2 section should contain at most two short paragraphs; avoid long multi-paragraph sections
         - FAQ must contain {limits["faq_count"]} H3 questions, and each question must be a realistic user question related to {keyword}
         - Each FAQ question must be followed by one concise answer paragraph
         - Conclusion must be the final H2 section
@@ -428,8 +436,8 @@ def build_polish_prompt(
         - Keep the article in {language}
         - {topic_requirement}
         - {polish_word_instruction}
-        - For this target length, keep the body within {density_notes["max_h2"]} H2 sections and {density_notes["max_h3"]} H3 subsections total whenever possible
-        - If the draft already fits the structure, avoid adding new headings; strengthen the existing wording instead
+        - HARD LIMIT: the article must have no more than {density_notes["max_h2"]} body H2 sections and {density_notes["max_h3"]} body H3 subsections — if the draft exceeds this, merge or remove the least essential sections
+        - Do not add new headings; shorten or merge existing sections to meet the word count limit
         - Keep compliance with the following rule context:
         {rule_brief}
         {geo_requirements}
