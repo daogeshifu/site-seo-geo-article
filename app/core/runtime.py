@@ -47,7 +47,7 @@ def build_services(config_override: dict[str, Any] | None = None) -> AppServices
         settings.image_dir = settings.data_dir / "images"
 
     cache_service = CacheService(settings.cache_dir)
-    doc_export_service = DocExportService()
+    doc_export_service = DocExportService(image_dir=settings.image_dir)
     auth_service = AuthService(settings)
     llm_client = LLMClient(settings)
     oss_service = AliyunOSSService(settings)
