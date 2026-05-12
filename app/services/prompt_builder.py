@@ -15,12 +15,12 @@ def _normalize_mode_type(mode_type: int) -> int:
 def _body_structure_limits(word_limit: int) -> dict[str, int]:
     normalized_limit = max(200, int(word_limit))
     if normalized_limit <= 1000:
-        return {"max_h2": 2, "max_h3": 2, "faq_count": 2}
+        return {"max_h2": 2, "max_h3": 2, "faq_count": 4}
     if normalized_limit <= 1400:
-        return {"max_h2": 3, "max_h3": 3, "faq_count": 2}
+        return {"max_h2": 3, "max_h3": 3, "faq_count": 4}
     if normalized_limit <= 1800:
-        return {"max_h2": 4, "max_h3": 4, "faq_count": 3}
-    return {"max_h2": 5, "max_h3": 5, "faq_count": 4}
+        return {"max_h2": 4, "max_h3": 4, "faq_count": 4}
+    return {"max_h2": 5, "max_h3": 5, "faq_count": 5}
 
 
 def _word_count_instructions(word_limit: int, limits: dict[str, int]) -> tuple[str, str]:
@@ -173,6 +173,7 @@ def build_strategy_prompt(
             - Internal link plan should call out the best early-link placement when rule context requires it
             - Compliance notes should reflect disclaimers, compatibility notes, or banned-term constraints
             - Image briefs should describe helpful supporting visuals and mention topic placement advice
+            - If the keyword signals a comparison or alternatives intent (e.g., contains "vs", "versus", "alternatives", "best X for Y", "compare"), do not recommend or name specific competing brands or products in the outline or writing suggestions; compare based on neutral criteria, use-case fit, and objective specifications instead
             {mode_requirements}
             """
         ).strip()
@@ -246,6 +247,8 @@ def build_strategy_prompt(
         - Meta description should stay within 160 characters
         - If internal links are required, plan them near the top of the article
         - Avoid third-party narrator phrasing such as "According to official docs" or "through official documentation we can conclude"
+        - If the keyword signals a comparison or alternatives intent (e.g., contains "vs", "versus", "alternatives", "best X for Y", "compare"), do not recommend or name specific competing brands or products in the outline or writing suggestions; compare based on neutral criteria, use-case fit, and objective specifications instead
+        - For the reference_plan field, list authoritative local organizations relevant to the country/market context (e.g., government agencies, national standards institutes, industry regulators, official academic institutions). Each entry should follow the format: "<Organization Name> — <Document or Publication Title> — <URL>". Do not use generic placeholder descriptions.
         {mode_requirements}
         """
     ).strip()
@@ -361,10 +364,11 @@ def build_draft_prompt(
         - {draft_word_instruction}
         - Use short, extractable paragraphs
         - Make headings easy for AI systems to quote or summarize
-        - Mention citations, proof, benchmark data, or source types without inventing fake source URLs
+        - For the References and Evidence to Verify section, cite real authoritative local organizations relevant to the country/market (e.g., government agencies, national standards institutes, industry regulators, official academic institutions). Each reference entry must include the organization name, document or publication title, and a real URL. Do not use placeholder text or invent sources.
         - Use AI Q&A reference answer and adopted source links from rule context as GEO reference material when provided
         - If brand/product info is provided, keep entity mentions consistent and verifiable
         - Use direct explanatory voice. Do not write in a third-party narrator tone such as "According to official docs", "Based on official documentation", or "through official documentation we can conclude"
+        - If the keyword signals a comparison or alternatives intent (e.g., contains "vs", "versus", "alternatives", "best X for Y", "compare"), do not name or recommend specific competing brands or products anywhere in the article body; compare only on neutral criteria, use-case fit, and objective specifications
         - Respect all compliance notes, disclaimers, and compatibility constraints from the rule context
         {mode_requirements}
         """
@@ -411,13 +415,15 @@ def build_polish_prompt(
           4. one H2 named References and Evidence to Verify
           5. one H2 named FAQ
           6. one H2 named Conclusion as the final section
-        - FAQ must stay immediately before Conclusion and contain 2-4 natural user questions related to the target keyword
+        - FAQ must stay immediately before Conclusion and contain {density_notes["faq_count"]} natural user questions related to the target keyword
         - Keep all headings and visible text in the requested language
         - Unless the article has a clear structural problem, do not add, remove, reorder, or rename sections
         - Default to polishing wording, headings, clarity, and fluency rather than restructuring
         - Remove AI-sounding phrasing, generic filler, and robotic repetition so the article reads like it was written by a human writer
         - Remove third-party narrator phrasing such as "According to official docs", "Based on official documentation", "through official documentation we can conclude", or "通过官方文档可以得出"
         - State conclusions directly, then place source guidance in the references section
+        - If the References and Evidence to Verify section contains placeholder text or invented sources, replace them with real authoritative local organizations (government agencies, national standards institutes, industry regulators, or official academic institutions), each with organization name, document/publication title, and a real URL
+        - If the keyword signals a comparison or alternatives intent, ensure the article does not name or recommend specific competing brands; replace any competitor mentions with neutral criteria-based comparisons
         """
         if category == "geo"
         else ""
