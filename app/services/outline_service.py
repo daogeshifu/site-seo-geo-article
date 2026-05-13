@@ -153,6 +153,8 @@ Allowed internal links:
 - Use AI Q&A reference answer and adopted source links as GEO research input when provided.
 - Only recommend internal links from the allowed list above.
 - If a Shopify URL is required, place it naturally in the early buying-intent section.
+- If the keyword signals a comparison or alternatives intent (e.g., contains "vs", "versus", "alternatives", "best X for Y", "compare"), do not name or recommend specific competing brands or products anywhere in the outline or writing suggestions; base comparisons only on neutral criteria, use-case fit, and objective specifications.
+- For any references or sources section in the outline, plan to cite real authoritative local organizations relevant to the country/market context (e.g., government agencies, national standards institutes, industry regulators, official academic institutions). Each planned reference should include the organization name, document or publication title, and a real URL. Do not use generic placeholder descriptions.
 - Return an outline a writer can use immediately.
 
 Return strict JSON only:
