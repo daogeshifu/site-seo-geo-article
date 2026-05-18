@@ -44,6 +44,40 @@ def _word_count_instructions(word_limit: int, limits: dict[str, int]) -> tuple[s
     return draft, polish
 
 
+def _get_section_names(language: str) -> dict[str, str]:
+    """Return localized names for fixed GEO article sections based on target language."""
+    lang = language.lower()
+    if any(kw in lang for kw in ("dutch", "nl", "nederlands", "netherlands")):
+        return {
+            "quick_answer_prefix": "Kort antwoord",
+            "references": "Bronnen en controlepunten",
+            "faq": "Veelgestelde vragen",
+            "conclusion": "Conclusie",
+        }
+    # Default: English
+    return {
+        "quick_answer_prefix": "Quick Answer",
+        "references": "References and Evidence to Verify",
+        "faq": "FAQ",
+        "conclusion": "Conclusion",
+    }
+
+
+def _strict_language_note(language: str) -> str:
+    """Return a strict language-purity warning for non-English targets."""
+    if language.lower() in ("english", "en"):
+        return ""
+    return (
+        f"STRICT LANGUAGE RULE: Every single word in the entire article — "
+        f"including the H1 title, every H2 and H3 heading, the Quick Answer prefix, "
+        f"all paragraph text, all list items, and all anchor text — must be written "
+        f"exclusively in {language}. "
+        f"Do NOT use English words, phrases, or abbreviations anywhere, not even for section headings or labels. "
+        f"Translate every fixed section name into {language} as instructed. "
+        f"Writing even one English word in a {language} article is a critical error."
+    )
+
+
 def _build_rule_brief(rule_context: dict[str, Any]) -> str:
     context = rule_context.get("context", {})
     notes = [
@@ -94,6 +128,8 @@ def build_strategy_prompt(
     rule_brief = _build_rule_brief(rule_context or {})
     normalized_mode_type = _normalize_mode_type(mode_type)
     limits = _body_structure_limits(word_limit)
+    sec = _get_section_names(language)
+    strict_lang = _strict_language_note(language)
     mode_context = (
         f"""
         Provided outline from the keyword field:
@@ -156,6 +192,7 @@ def build_strategy_prompt(
 
             Requirements:
             - All output must be written in {language}
+            {f"- {strict_lang}" if strict_lang else ""}
             - Follow SEO blog rules:
               1. Meta title should stay within 60 characters
               2. Meta description should stay within 160 characters
@@ -217,6 +254,7 @@ def build_strategy_prompt(
         Requirements:
         - All output must be written in {language}
         - Titles, section headings, anchor text, and body content must all use {language}
+        {f"- {strict_lang}" if strict_lang else ""}
         - Optimize for GEO / AI citation readiness:
           1. answer-first structure
           2. high information density
@@ -227,11 +265,11 @@ def build_strategy_prompt(
           7. direct, neutral, first-party explanatory tone
         - The final article structure is fixed:
           1. one H1 title
-          2. an opening paragraph starting with bold "Quick Answer:" (inline, not a separate H2 heading), followed by 1-2 short paragraphs
+          2. an opening paragraph starting with bold "{sec['quick_answer_prefix']}:" (inline, not a separate H2 heading), followed by 1-2 short paragraphs
           3. one or more body H2 sections with optional H3 subsections
-          4. one H2 named References and Evidence to Verify
-          5. one H2 named FAQ
-          6. one H2 named Conclusion
+          4. one H2 named {sec['references']}
+          5. one H2 named {sec['faq']}
+          6. one H2 named {sec['conclusion']}
         - The outline field must describe body sections only
         - HARD LIMIT: the outline must contain no more than {limits["max_h2"]} body H2 sections — combine related subtopics into fewer sections rather than adding more H2s
         - HARD LIMIT: use no more than {limits["max_h3"]} body H3 subsections in total
@@ -267,6 +305,8 @@ def build_draft_prompt(
     rule_brief = _build_rule_brief(rule_context or {})
     normalized_mode_type = _normalize_mode_type(mode_type)
     limits = _body_structure_limits(word_limit)
+    sec = _get_section_names(language)
+    strict_lang = _strict_language_note(language)
     draft_word_instruction, _polish_word_instruction = _word_count_instructions(word_limit, limits)
     content_context = (
         f"""
@@ -307,6 +347,8 @@ def build_draft_prompt(
             Requirements:
             - Return pure HTML only
             - Use h1, h2, h3, p, ul, li, strong, a tags only
+            - All visible text must be written in {language}
+            {f"- {strict_lang}" if strict_lang else ""}
             - Structure:
               1. exact H1
               2. introduction that answers intent quickly
@@ -344,22 +386,23 @@ def build_draft_prompt(
         - Return pure HTML only
         - Use h1, h2, h3, p, ul, li, strong, a tags only
         - All visible text, including the H1 title, all headings, paragraph text, list text, and anchor text, must be written in {language}
+        {f"- {strict_lang}" if strict_lang else ""}
         - The final structure must be exactly:
           1. one H1 title
-          2. Quick Answer as inline bold text at the start of the opening paragraph (not a separate heading),followed by 1-2 short paragraphs
+          2. {sec['quick_answer_prefix']} as inline bold text at the start of the opening paragraph (not a separate heading), followed by 1-2 short paragraphs
           3. one or more body H2 sections with optional H3 subsections
-          4. one H2 with the exact text References and Evidence to Verify
-          5. one H2 with the exact text FAQ
-          6. one H2 with the exact text Conclusion
-        - References and Evidence to Verify must appear immediately before FAQ
-        - FAQ must appear immediately before Conclusion
+          4. one H2 with the exact text {sec['references']}
+          5. one H2 with the exact text {sec['faq']}
+          6. one H2 with the exact text {sec['conclusion']}
+        - {sec['references']} must appear immediately before {sec['faq']}
+        - {sec['faq']} must appear immediately before {sec['conclusion']}
         - HARD LIMIT: use exactly {limits["max_h2"]} body H2 sections maximum — do not add extra H2 sections beyond this count
         - HARD LIMIT: use at most {limits["max_h3"]} H3 subsections total across the entire article
         - Only use H3 when it materially improves clarity; do not add H3 by default
         - Each body H2 section should contain at most two short paragraphs; avoid long multi-paragraph sections
-        - FAQ must contain {limits["faq_count"]} H3 questions, and each question must be a realistic user question related to {keyword}
+        - {sec['faq']} must contain {limits["faq_count"]} H3 questions, and each question must be a realistic user question related to {keyword}
         - Each FAQ question must be followed by one concise answer paragraph
-        - Conclusion must be the final H2 section
+        - {sec['conclusion']} must be the final H2 section
         - Do not add TL;DR, update log, appendix, or any extra top-level section outside the fixed structure
         - {draft_word_instruction}
         - Use short, extractable paragraphs
@@ -390,6 +433,8 @@ def build_polish_prompt(
         else "Improve citability, answer extraction, trust signals, and structural consistency."
     )
     rule_brief = _build_rule_brief(rule_context or {})
+    sec = _get_section_names(language)
+    strict_lang = _strict_language_note(language)
     normalized_mode_type = _normalize_mode_type(mode_type)
     topic_requirement = (
         'Keep the keyword "{keyword}" naturally present'.format(keyword=keyword)
@@ -410,13 +455,14 @@ def build_polish_prompt(
         """
         - For GEO articles, the final structure must be exactly:
           1. one H1 title
-          2. an opening paragraph starting with bold "Quick Answer:" (inline, not a separate H2 heading), followed by 1-2 short paragraphs
+          2. an opening paragraph starting with bold "{sec['quick_answer_prefix']}:" (inline, not a separate H2 heading), followed by 1-2 short paragraphs
           3. one or more body H2 sections with optional H3 subsections
-          4. one H2 named References and Evidence to Verify
-          5. one H2 named FAQ
-          6. one H2 named Conclusion as the final section
-        - FAQ must stay immediately before Conclusion and contain {density_notes["faq_count"]} natural user questions related to the target keyword
+          4. one H2 named {sec['references']}
+          5. one H2 named {sec['faq']}
+          6. one H2 named {sec['conclusion']} as the final section
+        - {sec['faq']} must stay immediately before {sec['conclusion']} and contain {density_notes["faq_count"]} natural user questions related to the target keyword
         - Keep all headings and visible text in the requested language
+        - {strict_lang if strict_lang else "Do not mix languages within the article."}
         - Unless the article has a clear structural problem, do not add, remove, reorder, or rename sections
         - Default to polishing wording, headings, clarity, and fluency rather than restructuring
         - Remove AI-sounding phrasing, generic filler, and robotic repetition so the article reads like it was written by a human writer
@@ -440,6 +486,7 @@ def build_polish_prompt(
         - {structure_requirement.removeprefix("- ")}
         - Do not change the core meaning
         - Keep the article in {language}
+        {f"- {strict_lang}" if strict_lang else ""}
         - {topic_requirement}
         - {polish_word_instruction}
         - HARD LIMIT: the article must have no more than {density_notes["max_h2"]} body H2 sections and {density_notes["max_h3"]} body H3 subsections — if the draft exceeds this, merge or remove the least essential sections
