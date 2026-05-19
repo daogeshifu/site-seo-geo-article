@@ -128,6 +128,7 @@ class WriterService:
             category=category,
             keyword=str(article.get("title") or keyword) if normalized_mode_type == 2 else keyword,
             rule_context=rule_context,
+            language=language,
         )
         return self._attach_images(
             asset_namespace=asset_namespace,
