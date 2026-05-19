@@ -8,10 +8,30 @@ from typing import Any
 H1_RE = re.compile(r"<h1\b", re.IGNORECASE)
 FIRST_H1_RE = re.compile(r"<h1\b[^>]*>.*?</h1>", re.IGNORECASE | re.DOTALL)
 P_RE = re.compile(r"<p>(.*?)</p>", re.IGNORECASE | re.DOTALL)
-FAQ_RE = re.compile(r"<h[23]>\s*FAQ\s*</h[23]>", re.IGNORECASE)
-REFERENCES_RE = re.compile(r"<h[23]>\s*References?(?:\s+and\s+Evidence\s+to\s+Verify)?\s*</h[23]>", re.IGNORECASE)
-CONCLUSION_RE = re.compile(r"<h2>\s*Conclusion\s*</h2>", re.IGNORECASE)
+FAQ_RE = re.compile(r"<h[23]>\s*(?:FAQ|Veelgestelde\s+vragen)\s*</h[23]>", re.IGNORECASE)
+REFERENCES_RE = re.compile(
+    r"<h[23]>\s*(?:References?(?:\s+and\s+Evidence\s+to\s+Verify)?|Bronnen(?:\s+en\s+controlepunten)?|Referenties)\s*</h[23]>",
+    re.IGNORECASE,
+)
+CONCLUSION_RE = re.compile(r"<h2>\s*(?:Conclusion|Conclusie)\s*</h2>", re.IGNORECASE)
 H2_SECTION_RE = re.compile(r"(<h2\b[^>]*>(.*?)</h2>)(.*?)(?=<h2\b|$)", re.IGNORECASE | re.DOTALL)
+
+
+def _get_section_names(language: str) -> dict[str, str]:
+    lang = language.lower()
+    if any(kw in lang for kw in ("dutch", "nl", "nederlands", "netherlands")):
+        return {
+            "quick_answer_prefix": "Kort antwoord",
+            "references": "Bronnen en controlepunten",
+            "faq": "Veelgestelde vragen",
+            "conclusion": "Conclusie",
+        }
+    return {
+        "quick_answer_prefix": "Quick Answer",
+        "references": "References and Evidence to Verify",
+        "faq": "FAQ",
+        "conclusion": "Conclusion",
+    }
 
 
 class ArticleValidator:
@@ -22,9 +42,11 @@ class ArticleValidator:
         category: str,
         keyword: str,
         rule_context: dict[str, Any],
+        language: str = "English",
     ) -> dict[str, Any]:
         working = deepcopy(article)
         html = str(working.get("raw_html") or working.get("html") or "")
+        sec = _get_section_names(language)
         fixes: list[str] = []
         warnings: list[str] = []
         checks: list[dict[str, Any]] = []
@@ -37,12 +59,7 @@ class ArticleValidator:
         if voice_hits:
             fixes.extend(voice_hits)
 
-        working["title"], title_trimmed = self._trim_text(
-            str(working.get("title") or keyword),
-            int(rule_context.get("meta_title_limit", 60)),
-        )
-        if title_trimmed:
-            fixes.append("trimmed article title to the configured title limit")
+        working["title"] = str(working.get("title") or keyword).strip()
 
         working["meta_title"], meta_title_trimmed = self._trim_text(
             str(working.get("meta_title") or working["title"]),
@@ -63,6 +80,7 @@ class ArticleValidator:
             keyword=keyword,
             summary=str((working.get("strategy") or {}).get("answer_first_summary") or ""),
             enabled=category == "geo",
+            sec=sec,
         )
         if quick_answer_added:
             fixes.append("added a quick-answer block for GEO extraction")
@@ -88,6 +106,7 @@ class ArticleValidator:
             enabled=category == "geo",
             links=rule_context.get("resolved_internal_links") or [],
             notes=rule_context.get("required_notes") or [],
+            sec=sec,
         )
         if references_added:
             fixes.append("added a references and verification section")
@@ -98,6 +117,7 @@ class ArticleValidator:
                 keyword=keyword,
                 summary=str((working.get("strategy") or {}).get("answer_first_summary") or ""),
                 disclaimer=str(rule_context.get("required_disclaimer") or ""),
+                sec=sec,
             )
             fixes.extend(geo_fix_notes)
 
@@ -105,6 +125,7 @@ class ArticleValidator:
             html,
             category=category,
             word_limit=int(working.get("word_limit") or 1200),
+            sec=sec,
         )
         fixes.extend(density_fix_notes)
 
@@ -126,11 +147,12 @@ class ArticleValidator:
             warnings.append("required disclaimer is still missing after remediation")
 
         if category == "geo":
-            quick_answer_present = "Quick Answer" in html
+            qa_prefix = sec["quick_answer_prefix"]
+            quick_answer_present = qa_prefix in html or "Quick Answer" in html
             references_present = bool(REFERENCES_RE.search(html))
             faq_present = bool(FAQ_RE.search(html))
             conclusion_present = bool(CONCLUSION_RE.search(html))
-            structure_order_ok = self._geo_structure_order_is_valid(html)
+            structure_order_ok = self._geo_structure_order_is_valid(html, sec=sec)
             checks.append(
                 {
                     "name": "geo_structure",
@@ -190,13 +212,14 @@ class ArticleValidator:
             return text, False
         return text[: limit - 3].rstrip() + "...", True
 
-    def _ensure_quick_answer(self, html: str, *, keyword: str, summary: str, enabled: bool) -> tuple[str, bool]:
+    def _ensure_quick_answer(self, html: str, *, keyword: str, summary: str, enabled: bool, sec: dict[str, str]) -> tuple[str, bool]:
         if not enabled:
             return html, False
-        if "Quick Answer" in html:
+        qa_prefix = sec["quick_answer_prefix"]
+        if qa_prefix in html or "Quick Answer" in html:
             return html, False
         h1_match = FIRST_H1_RE.search(html)
-        block = self._quick_answer_block(keyword, summary)
+        block = self._quick_answer_block(keyword, summary, sec=sec)
         if not h1_match:
             return f"{block}\n{html}", True
         insertion_point = h1_match.end()
@@ -241,6 +264,7 @@ class ArticleValidator:
         enabled: bool,
         links: list[dict[str, str]],
         notes: list[str],
+        sec: dict[str, str],
     ) -> tuple[str, bool]:
         if not enabled:
             return html, False
@@ -254,7 +278,7 @@ class ArticleValidator:
             items.append(f'<li>Internal reference: <a href="{link["url"]}">{link["label"]}</a>.</li>')
         for note in notes[:2]:
             items.append(f"<li>{note}</li>")
-        block = "<h2>References and Evidence to Verify</h2><ul>" + "".join(items) + "</ul>"
+        block = f"<h2>{sec['references']}</h2><ul>" + "".join(items) + "</ul>"
         faq_match = FAQ_RE.search(html)
         if faq_match:
             return html[: faq_match.start()] + block + html[faq_match.start() :], True
@@ -291,6 +315,7 @@ class ArticleValidator:
         keyword: str,
         summary: str,
         disclaimer: str,
+        sec: dict[str, str],
     ) -> tuple[str, list[str]]:
         h1_match = FIRST_H1_RE.search(html)
         if not h1_match:
@@ -315,25 +340,25 @@ class ArticleValidator:
             content = match.group(3).strip()
             heading_key = re.sub(r"\s+", " ", heading_text.lower())
 
-            if heading_key == "quick answer" or heading_key == "tl;dr":
+            if heading_key in {"quick answer", "kort antwoord", "tl;dr"}:
                 if not quick_content:
                     quick_content = content
                 fixes.append("normalized the GEO quick-answer section heading")
                 continue
-            if heading_key in {"faq", "update log", "appendix"}:
-                if heading_key == "faq":
+            if heading_key in {"faq", "veelgestelde vragen", "update log", "appendix"}:
+                if heading_key in {"faq", "veelgestelde vragen"}:
                     if not faq_content:
                         faq_content = content
                     fixes.append("normalized the GEO FAQ section heading")
                 else:
                     fixes.append(f"removed unsupported GEO section '{heading_text}'")
                 continue
-            if "reference" in heading_key or "citation" in heading_key or "evidence to verify" in heading_key:
+            if "reference" in heading_key or "citation" in heading_key or "evidence to verify" in heading_key or "bronnen" in heading_key or "referenties" in heading_key:
                 if not references_content:
                     references_content = content
                 fixes.append("normalized the GEO references section heading")
                 continue
-            if heading_key == "conclusion":
+            if heading_key in {"conclusion", "conclusie"}:
                 if not conclusion_content:
                     conclusion_content = content
                 fixes.append("normalized the GEO conclusion section heading")
@@ -380,20 +405,22 @@ class ArticleValidator:
             fixes.append("moved disclaimer into the GEO conclusion section")
 
         quick_wrapped = self._ensure_wrapped_html(quick_content)
-        quick_inline = self._make_inline_quick_answer(quick_wrapped)
+        quick_inline = self._make_inline_quick_answer(quick_wrapped, sec=sec)
         rebuilt = [
             h1_block,
             quick_inline,
             *[section.strip() for section in body_sections],
-            f"<h2>References and Evidence to Verify</h2>{self._ensure_wrapped_html(references_content)}",
-            f"<h2>FAQ</h2>{self._ensure_wrapped_html(faq_content)}",
-            f"<h2>Conclusion</h2>{self._ensure_wrapped_html(conclusion_content)}",
+            f"<h2>{sec['references']}</h2>{self._ensure_wrapped_html(references_content)}",
+            f"<h2>{sec['faq']}</h2>{self._ensure_wrapped_html(faq_content)}",
+            f"<h2>{sec['conclusion']}</h2>{self._ensure_wrapped_html(conclusion_content)}",
         ]
         return "\n".join(part for part in rebuilt if part).strip(), fixes
 
-    def _geo_structure_order_is_valid(self, html: str) -> bool:
+    def _geo_structure_order_is_valid(self, html: str, *, sec: dict[str, str] | None = None) -> bool:
         h1_match = FIRST_H1_RE.search(html)
-        quick_match = re.search(r"<strong>\s*Quick Answer\s*[:：]?\s*</strong>", html, re.IGNORECASE)
+        qa_prefix = (sec or {}).get("quick_answer_prefix", "Quick Answer")
+        qa_pattern = rf"<strong>\s*(?:Quick Answer|{re.escape(qa_prefix)})\s*[:：]?\s*</strong>"
+        quick_match = re.search(qa_pattern, html, re.IGNORECASE)
         references_match = REFERENCES_RE.search(html)
         faq_match = FAQ_RE.search(html)
         conclusion_match = CONCLUSION_RE.search(html)
@@ -404,9 +431,10 @@ class ArticleValidator:
         tail = html[conclusion_match.end() :].strip()
         return "<h2" not in tail.lower()
 
-    def _quick_answer_block(self, keyword: str, summary: str) -> str:
+    def _quick_answer_block(self, keyword: str, summary: str, *, sec: dict[str, str] | None = None) -> str:
+        qa_prefix = (sec or {}).get("quick_answer_prefix", "Quick Answer")
         text = self._quick_answer_text(keyword, summary)
-        return f"<p><strong>Quick Answer:</strong> {text}</p>"
+        return f"<p><strong>{qa_prefix}:</strong> {text}</p>"
 
     def _quick_answer_text(self, keyword: str, summary: str) -> str:
         return summary.strip() or (
@@ -414,14 +442,15 @@ class ArticleValidator:
             "then backs it up with verifiable product details, links, and source guidance."
         )
 
-    def _make_inline_quick_answer(self, wrapped_html: str) -> str:
-        """Ensure the quick-answer content starts with <strong>Quick Answer:</strong> inline."""
-        if "Quick Answer" in wrapped_html:
+    def _make_inline_quick_answer(self, wrapped_html: str, *, sec: dict[str, str] | None = None) -> str:
+        """Ensure the quick-answer content starts with <strong>Quick Answer:</strong> (or localized equivalent) inline."""
+        qa_prefix = (sec or {}).get("quick_answer_prefix", "Quick Answer")
+        if qa_prefix in wrapped_html or "Quick Answer" in wrapped_html:
             return wrapped_html
         p_match = re.match(r"<p>(.*)", wrapped_html, re.IGNORECASE | re.DOTALL)
         if p_match:
-            return f"<p><strong>Quick Answer:</strong> {p_match.group(1)}"
-        return f"<p><strong>Quick Answer:</strong> {wrapped_html}</p>"
+            return f"<p><strong>{qa_prefix}:</strong> {p_match.group(1)}"
+        return f"<p><strong>{qa_prefix}:</strong> {wrapped_html}</p>"
 
     def _first_paragraph_text(self, html: str) -> str:
         match = P_RE.search(html)
@@ -451,7 +480,7 @@ class ArticleValidator:
         ]
         return "".join(f"<h3>{question}</h3><p>{answer}</p>" for question, answer in questions)
 
-    def _normalize_body_density(self, html: str, *, category: str, word_limit: int) -> tuple[str, list[str]]:
+    def _normalize_body_density(self, html: str, *, category: str, word_limit: int, sec: dict[str, str] | None = None) -> tuple[str, list[str]]:
         h1_match = FIRST_H1_RE.search(html)
         if not h1_match:
             return html, []
@@ -465,7 +494,7 @@ class ArticleValidator:
         h1_block = h1_match.group(0).strip()
         preamble = remainder[: first_h2_match.start()]
         section_source = remainder[first_h2_match.start() :]
-        special_titles = self._special_h2_titles(category)
+        special_titles = self._special_h2_titles(category, sec=sec)
 
         body_sections: list[dict[str, str]] = []
         special_sections: list[str] = []
@@ -523,10 +552,15 @@ class ArticleValidator:
             return {"max_h2": 4, "max_h3": 4}
         return {"max_h2": 5, "max_h3": 5}
 
-    def _special_h2_titles(self, category: str) -> set[str]:
+    def _special_h2_titles(self, category: str, *, sec: dict[str, str] | None = None) -> set[str]:
+        base: set[str]
         if category == "geo":
-            return {"references and evidence to verify", "faq", "conclusion"}
-        return {"conclusion", "faq", "disclaimer"}
+            base = {"references and evidence to verify", "faq", "conclusion"}
+        else:
+            base = {"conclusion", "faq", "disclaimer"}
+        if sec:
+            base.update(name.lower() for name in [sec.get("references", ""), sec.get("faq", ""), sec.get("conclusion", "")] if name)
+        return base
 
     def _count_content_blocks(self, content: str) -> int:
         return len(re.findall(r"<(p|ul|ol|h3)\b", content, re.IGNORECASE))
