@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.llm_client import LLMClient
-from app.services.prompt_builder import _body_structure_limits
+from app.services.prompt_builder import _ai_answer_data_guidance, _body_structure_limits, _cta_guidance
 from app.services.rulebook_service import RulebookService
 from app.utils.common import extract_json_object
 
@@ -121,6 +121,8 @@ class OutlineService:
             "- Make the outline directly usable for an SEO article.\n"
             "- Include a strong intro, clear section hierarchy, conclusion, and FAQ."
         )
+        ai_answer_guidance = _ai_answer_data_guidance(category)
+        cta_guidance = _cta_guidance(category)
         info_block = info or "No extra business context provided."
         return f"""
 You are a senior {mode_name} content strategist.
@@ -141,6 +143,11 @@ Task context:
 Allowed internal links:
 {link_lines}
 
+AI-answer-data writing guidance:
+{ai_answer_guidance}
+
+{cta_guidance}
+
         Requirements:
 {mode_requirements}
 - Target approximately {word_limit} words/characters of textual content in the final article.
@@ -150,7 +157,15 @@ Allowed internal links:
 - Each body H2 should be substantial enough to support at least two meaningful content blocks in the final article.
 - Keep the outline practical, specific, and commercially relevant without sounding like an ad.
 - Use the business context and country rules when deciding comparison criteria and examples.
+- If a product, model, or first-party solution is introduced as a candidate, plan a short reason explaining why it is worth comparing for this specific reader scenario, using practical factors such as staged adoption, lower upfront commitment, capacity fit, installation requirements, verified specifications, or future expandability when supported by the input.
 - Use AI Q&A reference answer and adopted source links as GEO research input when provided.
+- If AI Q&A data includes product recommendations or explore_more items, distinguish primary recommendations, secondary recommendations, exploratory related items, and internal search queries.
+- Preserve evidence boundaries: do not infer search volume, conversion rate, official approval, or user behavior unless the input data explicitly provides it.
+- Plan the conclusion so it restates the core judgment and ends with a soft CTA built from reader scenario + next action + practical value.
+- For subsidy, local policy uncertainty, budget-sensitive, installation-fit, or product-selection topics, guide the reader to check actual capacity, expandability, installation requirements, and official specifications against their own usage habits, budget, and subsidy situation.
+- Make the CTA action-specific by naming the comparison dimensions: usage, available subsidy, installation conditions, capacity, expandability, and official specifications where relevant.
+- When brand/product info is provided, plan one FAQ question about when the named product, model, or solution is a logical option, and answer with fit conditions plus what needs extra verification.
+- Keep CTAs professional and useful: no hard-sell pressure, exaggerated benefits, or anxiety-driven framing.
 - Only recommend internal links from the allowed list above.
 - If a Shopify URL is required, place it naturally in the early buying-intent section.
 - If the keyword signals a comparison or alternatives intent (e.g., contains "vs", "versus", "alternatives", "best X for Y", "compare"), do not name or recommend specific competing brands or products anywhere in the outline or writing suggestions; base comparisons only on neutral criteria, use-case fit, and objective specifications.
@@ -315,7 +330,7 @@ Return strict JSON only:
 
 ## Conclusie
 - Vat het antwoord kort samen.
-- Sluit af met een natuurlijke CTA.
+- Sluit af met een zachte CTA: benoem de situatie van de lezer, noem welke specificaties of voorwaarden vergeleken moeten worden en maak duidelijk welke waarde die stap oplevert.
 
 ## FAQ
 {faq_lines}
@@ -342,6 +357,8 @@ Return strict JSON only:
                 f"{limits['max_h2']} H2-koppen en {limits['max_h3']} H3-koppen."
             ),
             "Werk met concrete criteria, zodat de lezer en AI-systemen het antwoord makkelijk kunnen samenvatten.",
+            "Plan de afsluitende CTA rond de situatie van de lezer, een concrete volgende stap en de praktische waarde daarvan.",
+            "Als er productcontext is, voeg een FAQ toe over wanneer die optie logisch is en welke voorwaarden eerst gecontroleerd moeten worden.",
         ]
         if info:
             suggestions.append("Verwerk merk-, product- of businesscontext alleen waar die het besluit van de lezer echt ondersteunt.")
