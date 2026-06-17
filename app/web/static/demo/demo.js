@@ -16,6 +16,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const recentTasks = document.getElementById("recent-tasks");
   const languageSelect = document.getElementById("language-select");
   const countrySelect = document.getElementById("country-select");
+  const contentVersionSelect = document.getElementById("content-version-select");
+  const publishingContextSelect = document.getElementById("publishing-context-select");
+  const publishingContextField = document.getElementById("publishing-context-field");
   let pollTimer = null;
   let accessToken = "";
   const languageCountryMap = {
@@ -286,6 +289,8 @@ document.addEventListener("DOMContentLoaded", () => {
       include_cover: task.include_cover ?? 1,
       content_image_count: task.content_image_count ?? 3,
       task_context: {
+        content_version: taskContext.content_version || "2.0",
+        publishing_context: taskContext.publishing_context || "official_website",
         country: taskContext.country || "",
         mentions_other_brands: taskContext.mentions_other_brands || false,
         requires_shopify_link: taskContext.requires_shopify_link || false,
@@ -400,6 +405,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (mappedLanguage) {
       languageSelect.value = mappedLanguage;
     }
+  }
+
+  function syncContentVersion() {
+    if (!contentVersionSelect || !publishingContextSelect || !publishingContextField) {
+      return;
+    }
+    const isV3 = contentVersionSelect.value === "3.0";
+    publishingContextSelect.disabled = !isV3;
+    publishingContextField.classList.toggle("field-disabled", !isV3);
   }
 
   function bindResultTabs() {
@@ -652,6 +666,8 @@ document.addEventListener("DOMContentLoaded", () => {
       include_cover: Number(formData.get("include_cover") || 1),
       content_image_count: Number(formData.get("content_image_count") || 3),
       task_context: {
+        content_version: formData.get("content_version") || "2.0",
+        publishing_context: formData.get("publishing_context") || "official_website",
         country: formData.get("country") || "",
         mentions_other_brands: formData.get("mentions_other_brands") === "true",
         requires_shopify_link: formData.get("requires_shopify_link") === "true",
@@ -701,5 +717,9 @@ document.addEventListener("DOMContentLoaded", () => {
     languageSelect.addEventListener("change", () => syncLanguageAndCountry("language"));
     countrySelect.addEventListener("change", () => syncLanguageAndCountry("country"));
     syncLanguageAndCountry("language");
+  }
+  if (contentVersionSelect) {
+    contentVersionSelect.addEventListener("change", syncContentVersion);
+    syncContentVersion();
   }
 });

@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 
 SupportedLanguage = Literal["English", "Chinese", "French", "German", "Dutch"]
 SupportedCountry = Literal["us", "cn", "fr", "de", "nl"]
+SupportedContentVersion = Literal["2.0", "3.0"]
+SupportedPublishingContext = Literal["official_website", "third_party_media", "conversion_page"]
 
 
 class TokenExchangeRequest(BaseModel):
@@ -33,6 +35,8 @@ class InternalLinkRequest(BaseModel):
 
 
 class TaskContextRequest(BaseModel):
+    content_version: SupportedContentVersion = "2.0"
+    publishing_context: SupportedPublishingContext = "official_website"
     country: SupportedCountry = "us"
     market: str = ""
     locale_variant: str = ""
@@ -75,6 +79,8 @@ class TaskCreateRequest(BaseModel):
                 "include_cover": 1,
                 "content_image_count": 2,
                 "task_context": {
+                    "content_version": "2.0",
+                    "publishing_context": "official_website",
                     "country": "de",
                     "requires_shopify_link": True,
                     "shopify_url": "https://de.ecoflow.com/products/stream-microinverter",
@@ -133,6 +139,8 @@ class OutlineCreateRequest(BaseModel):
                 "word_limit": 1200,
                 "force_refresh": False,
                 "task_context": {
+                    "content_version": "3.0",
+                    "publishing_context": "official_website",
                     "country": "nl",
                     "requires_shopify_link": True,
                     "shopify_url": "https://www.ankersolix.com/nl/products/a17c5",

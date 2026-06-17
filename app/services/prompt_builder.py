@@ -172,6 +172,35 @@ def _cta_guidance(category: str) -> str:
     ).strip()
 
 
+def _v3_publishing_guidance(rule_context: dict[str, Any]) -> str:
+    context = rule_context.get("context") or {}
+    if str(context.get("content_version") or "2.0") != "3.0":
+        return ""
+    publishing_context = str(context.get("publishing_context") or "official_website")
+    scene_notes = {
+        "official_website": (
+            "Publishing context: official_website. Use a first-party brand voice. "
+            "The article may prioritize the brand's own product or model when the input supports it. "
+            "Avoid naming competing products unless the keyword explicitly requires a comparison; when comparison is required, compare on objective criteria and do not endorse competitors."
+        ),
+        "third_party_media": (
+            "Publishing context: third_party_media. Use a neutral editorial voice. "
+            "Product recommendations must be balanced with clear criteria, trade-offs, and evidence. "
+            "Competing brands or alternatives may be discussed when relevant to the search intent."
+        ),
+        "conversion_page": (
+            "Publishing context: conversion_page. Use a practical buying-decision voice. "
+            "Make the product fit, scenario fit, proof points, and next action clearer than in a neutral article. "
+            "CTA can be stronger, but must stay evidence-based and avoid exaggerated claims or pressure."
+        ),
+    }
+    return (
+        "Content version: 3.0.\n"
+        f"{scene_notes.get(publishing_context, scene_notes['official_website'])}\n"
+        "For version 3.0, make product recommendations scenario-bound: name the candidate product when provided, explain why it should be compared early for the reader's use case, and keep the limits/verification points explicit."
+    )
+
+
 def build_strategy_prompt(
     category: str,
     keyword: str,
@@ -184,6 +213,7 @@ def build_strategy_prompt(
     rule_brief = _build_rule_brief(rule_context or {})
     ai_answer_guidance = _ai_answer_data_guidance(category)
     cta_guidance = _cta_guidance(category)
+    v3_guidance = _v3_publishing_guidance(rule_context or {})
     normalized_mode_type = _normalize_mode_type(mode_type)
     limits = _body_structure_limits(word_limit)
     sec = _get_section_names(language)
@@ -230,6 +260,8 @@ def build_strategy_prompt(
             {ai_answer_guidance}
 
             {cta_guidance}
+
+            {v3_guidance}
 
             Return strict JSON only:
             {{
@@ -300,6 +332,8 @@ def build_strategy_prompt(
         {ai_answer_guidance}
 
         {cta_guidance}
+
+        {v3_guidance}
 
         Return strict JSON only:
         {{
@@ -392,6 +426,7 @@ def build_draft_prompt(
     rule_brief = _build_rule_brief(rule_context or {})
     ai_answer_guidance = _ai_answer_data_guidance(category)
     cta_guidance = _cta_guidance(category)
+    v3_guidance = _v3_publishing_guidance(rule_context or {})
     normalized_mode_type = _normalize_mode_type(mode_type)
     limits = _body_structure_limits(word_limit)
     sec = _get_section_names(language)
@@ -436,6 +471,8 @@ def build_draft_prompt(
             {ai_answer_guidance}
 
             {cta_guidance}
+
+            {v3_guidance}
 
             Requirements:
             - Return pure HTML only
@@ -483,6 +520,8 @@ def build_draft_prompt(
         {ai_answer_guidance}
 
         {cta_guidance}
+
+        {v3_guidance}
 
         Requirements:
         - Return pure HTML only
@@ -542,6 +581,7 @@ def build_polish_prompt(
     rule_brief = _build_rule_brief(rule_context or {})
     ai_answer_guidance = _ai_answer_data_guidance(category)
     cta_guidance = _cta_guidance(category)
+    v3_guidance = _v3_publishing_guidance(rule_context or {})
     sec = _get_section_names(language)
     strict_lang = _strict_language_note(language)
     normalized_mode_type = _normalize_mode_type(mode_type)
@@ -610,6 +650,7 @@ def build_polish_prompt(
         {ai_answer_guidance}
         - Apply this CTA and conclusion guidance where relevant:
         {cta_guidance}
+        {v3_guidance}
         {geo_requirements}
         {mode_requirement}
         - Return HTML only

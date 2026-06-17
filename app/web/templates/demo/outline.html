@@ -108,6 +108,21 @@
                 </select>
               </label>
               <label>
+                Version
+                <select name="content_version" id="content-version-select" required>
+                  <option value="2.0">2.0 - Current</option>
+                  <option value="3.0">3.0 - Publishing Context</option>
+                </select>
+              </label>
+              <label id="publishing-context-field">
+                Publishing Context
+                <select name="publishing_context" id="publishing-context-select" disabled>
+                  <option value="official_website">Official Website</option>
+                  <option value="third_party_media">Third-party Media</option>
+                  <option value="conversion_page">Conversion Page</option>
+                </select>
+              </label>
+              <label>
                 Language
                 <select name="language" id="language-select" required>
                   <option value="English">English</option>
@@ -170,7 +185,7 @@
                 <textarea name="ai_qa_source" rows="3" placeholder="Paste source URLs adopted by the AI answer, one per line if there are multiple. Optional."></textarea>
               </label>
               <div class="token-note">
-                This page submits an async outline task, then polls by `outline_id`. `word_limit` also controls the recommended H2/H3/FAQ density, and `task_context` aligns with the article demo through `country`, `requires_shopify_link`, `shopify_url`, `ai_qa_content`, and `ai_qa_source`.
+                This page submits an async outline task, then polls by `outline_id`. Version `2.0` keeps the current detailed outline flow. Version `3.0` enables publishing context and uses a shorter H1/H2/FAQ/Internal Links outline style. `word_limit` also controls the recommended H2/H3/FAQ density, and `task_context` aligns with the article demo through `country`, `requires_shopify_link`, `shopify_url`, `ai_qa_content`, and `ai_qa_source`.
               </div>
               <div class="actions">
                 <button class="btn btn-primary" type="submit" id="outline-btn">Start Outline Task</button>

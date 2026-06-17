@@ -8,6 +8,11 @@ from app.services.rulebook_service import RulebookService
 from app.utils.common import extract_json_object
 
 
+def _v3_outline_limits(word_limit: int) -> tuple[int, int, int]:
+    _ = word_limit
+    return 5, 7, 6
+
+
 class OutlineService:
     def __init__(self, llm_client: LLMClient, rulebook_service: RulebookService | None = None) -> None:
         self.llm_client = llm_client
@@ -94,6 +99,16 @@ class OutlineService:
         mode_name = "GEO" if category == "geo" else "SEO"
         limits = _body_structure_limits(word_limit)
         context = rule_context.get("context") or {}
+        if str(context.get("content_version") or "2.0") == "3.0":
+            return self._build_v3_prompt(
+                category=category,
+                keyword=keyword,
+                info=info,
+                language=language,
+                rule_context=rule_context,
+                available_links=available_links,
+                word_limit=word_limit,
+            )
         link_lines = (
             "\n".join(f"- {item['label']}: {item['url']}" for item in available_links)
             or "- No official internal links provided"
@@ -187,6 +202,108 @@ Return strict JSON only:
 }}
 """.strip()
 
+    def _build_v3_prompt(
+        self,
+        *,
+        category: str,
+        keyword: str,
+        info: str,
+        language: str,
+        rule_context: dict[str, Any],
+        available_links: list[dict[str, str]],
+        word_limit: int,
+    ) -> str:
+        mode_name = "GEO" if category == "geo" else "SEO"
+        context = rule_context.get("context") or {}
+        publishing_context = str(context.get("publishing_context") or "official_website")
+        h2_min, h2_max, faq_count = _v3_outline_limits(word_limit)
+        link_lines = (
+            "\n".join(f"- {item['label']}: {item['url']}" for item in available_links)
+            or "- No official internal links provided"
+        )
+        publishing_notes = {
+            "official_website": (
+                "official_website: first-party brand article. Prioritize the provided brand/product when the input supports it. "
+                "Avoid competitor recommendations unless the keyword explicitly requires comparison; compare competitors only through objective specs, criteria, and fit."
+            ),
+            "third_party_media": (
+                "third_party_media: neutral editorial article. Use balanced comparison, objective criteria, evidence, and clear pros/cons. Competitors or alternatives may be named when relevant."
+            ),
+            "conversion_page": (
+                "conversion_page: buying-decision or landing-page content. Make the primary product, fit scenario, proof points, and CTA clearer, while avoiding exaggerated claims or pressure."
+            ),
+        }
+        ai_answer_guidance = _ai_answer_data_guidance(category)
+        cta_guidance = _cta_guidance(category)
+        info_block = info or "No extra business context provided."
+        return f"""
+You are a senior {mode_name} content strategist.
+Create a version 3.0 article outline.
+
+Keyword:
+{keyword}
+
+Business context:
+{info_block}
+
+Language:
+{language}
+
+Publishing context:
+{publishing_notes.get(publishing_context, publishing_notes["official_website"])}
+
+Task context:
+- Country: {context.get('country') or 'not specified'}
+- Market: {context.get('market') or 'not specified'}
+- Locale: {rule_context.get('locale_variant') or language}
+- AI Q&A reference answer: {context.get('ai_qa_content') or 'not provided'}
+- AI Q&A adopted source links: {context.get('ai_qa_source') or 'not provided'}
+- Shopify URL required: {rule_context.get('shopify_url') if rule_context.get('requires_shopify_link') and rule_context.get('shopify_url') else 'no'}
+
+Allowed internal links:
+{link_lines}
+
+AI-answer-data writing guidance:
+{ai_answer_guidance}
+
+{cta_guidance}
+
+Version 3.0 outline style:
+- Keep the outline compact and high-signal. Do not create a detailed paragraph-by-paragraph writing plan.
+- outline_markdown must be a short line-based skeleton only, not a full SEO brief.
+- Use exactly this output shape inside outline_markdown:
+  H1: ...
+  H2: ... - coverage query: "..."
+  H2: ... - decision factor: "..."
+  FAQ ({faq_count} questions)
+  Internal Links: ...
+- Do not include URL, slug, SEO title, meta description, intro notes, section descriptions, Markdown heading syntax (# or ##), or bullets under each H2 inside outline_markdown.
+- Plan {h2_min}-{h2_max} H2 lines only. Use no H3 sections unless the keyword explicitly requires grouped subtopics.
+- Each H2 must be one line only and should include one concise intent note such as: coverage query, user question, comparison angle, proof source, review source, or decision factor.
+- Include a "Quick Verdict (TL;DR)" or equivalent early H2 for comparison, buying-decision, and GEO topics.
+- Include a side-by-side specs or criteria table section when the topic compares products, models, specs, or options.
+- Include review/evidence summary sections only when sources are provided or named in the input; do not invent source names.
+- FAQ should be listed as "FAQ ({faq_count} questions)" rather than writing every FAQ answer in the outline.
+- Internal links should be listed by page type or provided URL label; use only allowed internal links when URLs are provided.
+- If brand/product info is provided, include one H2 or FAQ angle that explains when the named product/model/solution is a logical option.
+- Keep product recommendations scenario-bound. Do not call a product the universal best choice.
+- Return an outline a writer can use immediately, but keep outline_markdown close to the compact example style rather than a detailed plan.
+
+Return strict JSON only:
+{{
+  "title": "",
+  "outline_markdown": "",
+  "writing_suggestions": ["", "", ""],
+  "recommended_internal_links": [
+    {{
+      "label": "",
+      "url": "",
+      "reason": ""
+    }}
+  ]
+}}
+""".strip()
+
     def _normalize_payload(
         self,
         payload: dict[str, Any],
@@ -229,7 +346,7 @@ Return strict JSON only:
 
         outline_markdown = str(payload.get("outline_markdown") or "").strip()
         if not outline_markdown:
-            outline_markdown = self._default_outline(category, keyword, available_links, word_limit)
+            outline_markdown = self._default_outline(category, keyword, available_links, word_limit, task_context)
 
         return {
             "category": category,
@@ -262,7 +379,7 @@ Return strict JSON only:
             "language": language,
             "task_context": task_context,
             "title": keyword,
-            "outline_markdown": self._default_outline(category, keyword, available_links, word_limit),
+            "outline_markdown": self._default_outline(category, keyword, available_links, word_limit, task_context),
             "writing_suggestions": self._default_writing_suggestions(category, keyword, info, task_context, word_limit),
             "recommended_internal_links": self._default_internal_links(available_links),
             "generation_mode": "mock",
@@ -274,7 +391,10 @@ Return strict JSON only:
         keyword: str,
         available_links: list[dict[str, str]],
         word_limit: int,
+        task_context: dict[str, Any] | None = None,
     ) -> str:
+        if str((task_context or {}).get("content_version") or "2.0") == "3.0":
+            return self._default_v3_outline(keyword, available_links, word_limit)
         limits = _body_structure_limits(word_limit)
         source_label = "Bronnen en verificatie" if category == "geo" else "Aanbevolen interne links"
         first_link = next((item["url"] for item in available_links if item.get("url")), "")
@@ -340,6 +460,32 @@ Return strict JSON only:
 - Noem alleen verifieerbare claims en specificaties.
 """.strip()
 
+    def _default_v3_outline(
+        self,
+        keyword: str,
+        available_links: list[dict[str, str]],
+        word_limit: int,
+    ) -> str:
+        _h2_min, h2_max, faq_count = _v3_outline_limits(word_limit)
+        base_sections = [
+            ("Quick Verdict (TL;DR)", 'coverage query: "which option is the better fit and why"'),
+            ("Specs Comparison Table (Side-by-Side)", 'coverage query: "compare specs, capacity, output, charging, price, warranty"'),
+            ("Battery Life and Long-Term Value", 'coverage query: "cycle life, warranty, long-term investment"'),
+            ("Charging Speed and Real-World Convenience", 'coverage query: "charging time, alternator or solar advantage, daily use"'),
+            ("Running Key Appliances or Core Use Cases", 'coverage query: "peak output, air conditioner, fridge, off-grid caravan use"'),
+            ("Expandability for Long-Term Use", 'coverage query: "expandable capacity, accessories, future upgrade path"'),
+            ("What Real Users and Reviews Say", 'coverage query: "review summary, user feedback, evidence gaps"'),
+            ("Who Should Choose This Option", 'coverage query: "best-fit scenarios, poor-fit scenarios, what to verify first"'),
+            ("Final Buying Checklist", 'coverage query: "usage, budget, installation, specs, internal next step"'),
+        ]
+        section_lines = "\n".join(f"H2: {title} - {note}" for title, note in base_sections[:h2_max])
+        link_lines = ", ".join(item["label"] for item in available_links if item.get("label")) or "Product PDP, bundle page, compare specs page"
+        return f"""H1: {keyword}
+{section_lines}
+FAQ ({faq_count} questions)
+Internal Links: {link_lines}
+""".strip()
+
     def _default_writing_suggestions(
         self,
         category: str,
@@ -350,6 +496,15 @@ Return strict JSON only:
     ) -> list[str]:
         country = str(task_context.get("country") or "").upper()
         limits = _body_structure_limits(word_limit)
+        if str(task_context.get("content_version") or "2.0") == "3.0":
+            _h2_min, h2_max, faq_count = _v3_outline_limits(word_limit)
+            return [
+                f"Use version 3.0 outline style: H1, compact H2 lines with coverage notes, FAQ ({faq_count} questions), and Internal Links.",
+                f"Keep the outline concise and high-signal with no more than {h2_max} H2 sections.",
+                "Add coverage notes for search intent, subqueries, proof sources, reviews, comparison angles, or decision factors.",
+                "If product context is provided, include a scenario-bound product-fit angle without calling it the universal best choice.",
+                "Use the selected publishing context to tune neutrality, first-party product emphasis, and CTA strength.",
+            ]
         suggestions = [
             f"Open met een direct antwoord op '{keyword}' in de eerste 100-150 woorden.",
             (

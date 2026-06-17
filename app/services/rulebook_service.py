@@ -9,6 +9,8 @@ from app.utils.common import normalize_text
 
 
 RULEBOOK_PATH = Path(__file__).resolve().parents[1] / "data" / "rulebook.json"
+SUPPORTED_CONTENT_VERSIONS = {"2.0", "3.0"}
+SUPPORTED_PUBLISHING_CONTEXTS = {"official_website", "third_party_media", "conversion_page"}
 
 
 def _dedupe(items: list[str]) -> list[str]:
@@ -36,7 +38,15 @@ class RulebookService:
 
     def normalize_task_context(self, task_context: dict[str, Any] | None) -> dict[str, Any]:
         context = deepcopy(task_context or {})
+        content_version = str(context.get("content_version") or "2.0").strip()
+        if content_version not in SUPPORTED_CONTENT_VERSIONS:
+            content_version = "2.0"
+        publishing_context = normalize_text(str(context.get("publishing_context") or "official_website"))
+        if publishing_context not in SUPPORTED_PUBLISHING_CONTEXTS:
+            publishing_context = "official_website"
         normalized = {
+            "content_version": content_version,
+            "publishing_context": publishing_context,
             "country": normalize_text(str(context.get("country") or "")),
             "market": normalize_text(str(context.get("market") or "")),
             "locale_variant": str(context.get("locale_variant") or "").strip(),

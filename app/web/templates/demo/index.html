@@ -111,6 +111,21 @@
                 </select>
               </label>
               <label>
+                Version
+                <select name="content_version" id="content-version-select" required>
+                  <option value="2.0">2.0 - Current</option>
+                  <option value="3.0">3.0 - Publishing Context</option>
+                </select>
+              </label>
+              <label id="publishing-context-field">
+                Publishing Context
+                <select name="publishing_context" id="publishing-context-select" disabled>
+                  <option value="official_website">Official Website</option>
+                  <option value="third_party_media">Third-party Media</option>
+                  <option value="conversion_page">Conversion Page</option>
+                </select>
+              </label>
+              <label>
                 Provider
                 <select name="provider" required>
                   <option value="openai">OpenAI (ChatGPT)</option>
@@ -197,7 +212,7 @@
                 Force refresh and ignore cache for this run
               </label>
               <div class="token-note">
-                `mode_type` defaults to `1` for keyword mode and uses `2` for outline mode. In keyword mode, `keyword` is the target keyword. In outline mode, `keyword` stores the full outline and the writer will follow that structure strictly. `info` always stays as brand / product / customer context. The demo currently supports 5 language-country pairs through dropdowns only: English / United States, Chinese / China, French / France, German / Germany, and Dutch / Netherlands. `ai_qa_content` and `ai_qa_source` are optional GEO reference fields. `word_limit` defaults to `1200` and counts only text content (excluding images). `content_image_count` supports `0-3`. When it is `0`, no body images are generated. `include_cover` is only `0` or `1`.
+                `mode_type` defaults to `1` for keyword mode and uses `2` for outline mode. Version `2.0` keeps the current flow and prompts. Version `3.0` enables publishing context for official website, third-party media, or conversion page. In keyword mode, `keyword` is the target keyword. In outline mode, `keyword` stores the full outline and the writer will follow that structure strictly. `info` always stays as brand / product / customer context. The demo currently supports 5 language-country pairs through dropdowns only: English / United States, Chinese / China, French / France, German / Germany, and Dutch / Netherlands. `ai_qa_content` and `ai_qa_source` are optional GEO reference fields. `word_limit` defaults to `1200` and counts only text content (excluding images). `content_image_count` supports `0-3`. When it is `0`, no body images are generated. `include_cover` is only `0` or `1`.
               </div>
               <div class="actions">
                 <button class="btn btn-primary" type="submit" id="submit-btn">Start Task</button>
