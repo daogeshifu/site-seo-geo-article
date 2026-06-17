@@ -15,7 +15,7 @@ def _normalize_mode_type(mode_type: int) -> int:
 def _body_structure_limits(word_limit: int) -> dict[str, int]:
     normalized_limit = max(200, int(word_limit))
     if normalized_limit <= 1000:
-        return {"max_h2": 2, "max_h3": 2, "faq_count": 4}
+        return {"max_h2": 2, "max_h3": 2, "faq_count": 2}
     if normalized_limit <= 1400:
         return {"max_h2": 3, "max_h3": 3, "faq_count": 4}
     if normalized_limit <= 1800:
@@ -30,12 +30,14 @@ def _word_count_instructions(word_limit: int, limits: dict[str, int]) -> tuple[s
     total_parts = limits["max_h2"] + 4
     per_section = max(80, word_limit // total_parts)
     draft = (
+        f"Target length: approximately {word_limit} words excluding any image content. "
         f"The entire article — every section combined including intro, all H2/H3 body sections, FAQ, references, and conclusion — "
         f"must total between {floor} and {ceiling} words. "
         f"Each individual section should aim for around {per_section} words; do not write more than {per_section + 40} words per section. "
         f"Stop adding content once the running total approaches {ceiling} words."
     )
     polish = (
+        f"Target length: approximately {word_limit} words excluding image content. "
         f"The entire article must total between {floor} and {ceiling} words. "
         f"Count ALL sections: intro, body H2s, H3s, FAQ, references, and conclusion. "
         f"If the total exceeds {ceiling} words, shorten the longest sections first. "
@@ -116,6 +118,89 @@ def _build_rule_brief(rule_context: dict[str, Any]) -> str:
     return "\n".join(notes)
 
 
+def _ai_answer_data_guidance(category: str) -> str:
+    base = """
+    AI-answer-data writing guidance:
+    - If AI Q&A reference data is provided, treat it as research evidence about how AI systems framed the query, not as ground truth.
+    - Start from the user's real question and answer it directly before expanding into background.
+    - Prefer conditional conclusions when the data supports them, such as "yes, but only when..." or "it depends on...".
+    - Separate the target product/entity, use case, suitable scenarios, unsuitable scenarios, risks, and alternatives.
+    - When recommendations appear in AI Q&A data, distinguish between primary recommendations, secondary recommendations, and exploratory/related items.
+    - Do not confuse AI internal search queries with user-facing recommendation terms.
+    - Preserve evidence boundaries: say what the provided data supports, and avoid claiming search volume, conversion rate, official approval, or user behavior unless the input explicitly provides it.
+    - Use compact tables or bullet lists for scenario fit, constraints, recommendation tiers, and evidence gaps when they make the answer easier to scan.
+    """
+    if category == "geo":
+        return (
+            base
+            + """
+    - For GEO, make the opening answer extractable, then explain the AI reasoning path: product/entity positioning, scenario split, constraints, alternatives, and verification points.
+    - Add a section or subsection that makes the "recommended for / not recommended for" distinction explicit when the topic involves compatibility or product fit.
+    """
+        ).strip()
+    return (
+        base
+        + """
+    - For SEO, turn AI Q&A insights into practical content sections that match search intent: direct answer, decision criteria, fit matrix, alternatives, FAQ, and next-step internal links.
+    """
+    ).strip()
+
+
+def _cta_guidance(category: str) -> str:
+    base = """
+    CTA and conclusion guidance:
+    - Any CTA must combine the user's scenario, the next action, and the practical value of taking that action.
+    - Avoid standalone "buy now" language, hard-sell pressure, exaggerated savings, or anxiety-driven framing.
+    - When a product, model, or first-party solution is introduced as a candidate, explain why it is worth comparing for the reader's scenario instead of only naming it. Tie the reason to practical decision factors such as lower upfront commitment, staged expansion, capacity fit, installation simplicity, verified specifications, or future flexibility when the input supports those claims.
+    - For topics involving limited subsidies, uncertain local policy, budget sensitivity, installation fit, or product selection, guide readers to compare their own usage, available subsidy, installation conditions, actual capacity, expandability, and official specifications before judging fit.
+    - The conclusion must restate the core judgment, then add a soft next step such as comparing product fit, checking official specifications, confirming installation conditions, or reviewing an official product page when a provided URL is available.
+    - Make the final CTA action-specific: tell the reader what to compare or verify next, not only that they should "learn more" or "consider the product".
+    - Keep the tone professional, credible, and practical.
+    """
+    if category == "geo":
+        return (
+            base
+            + """
+    - For GEO, make the final next step easy to extract as practical guidance, not as a conversion-heavy sales pitch.
+    """
+        ).strip()
+    return (
+        base
+        + """
+    - For SEO, use the CTA to support search intent and internal linking without interrupting the article's direct answer.
+    """
+    ).strip()
+
+
+def _v3_publishing_guidance(rule_context: dict[str, Any]) -> str:
+    context = rule_context.get("context") or {}
+    if str(context.get("content_version") or "2.0") != "3.0":
+        return ""
+    publishing_context = str(context.get("publishing_context") or "official_website")
+    scene_notes = {
+        "official_website": (
+            "Publishing context: official_website. Use a first-party brand voice. "
+            "The article may prioritize the brand's own product or model when the input supports it. "
+            "Avoid naming competing products unless the keyword explicitly requires a comparison; when comparison is required, compare on objective criteria and do not endorse competitors."
+        ),
+        "third_party_media": (
+            "Publishing context: third_party_media. Use a neutral editorial voice. "
+            "Product recommendations must be balanced with clear criteria, trade-offs, and evidence. "
+            "Competing brands or alternatives may be discussed when relevant to the search intent."
+        ),
+        "conversion_page": (
+            "Publishing context: conversion_page. Use a practical buying-decision voice. "
+            "Make the product fit, scenario fit, proof points, and next action clearer than in a neutral article. "
+            "CTA can be stronger, but must stay evidence-based and avoid exaggerated claims or pressure."
+        ),
+    }
+    return (
+        "Content version: 3.0.\n"
+        f"{scene_notes.get(publishing_context, scene_notes['official_website'])}\n"
+        "For version 3.0, make product recommendations scenario-bound: name the candidate product when provided, explain why it should be compared early for the reader's use case, and keep the limits/verification points explicit."
+    )
+
+
 def build_strategy_prompt(
     category: str,
     keyword: str,
@@ -126,6 +211,9 @@ def build_strategy_prompt(
     mode_type: int = MODE_TYPE_KEYWORD,
 ) -> str:
     rule_brief = _build_rule_brief(rule_context or {})
+    ai_answer_guidance = _ai_answer_data_guidance(category)
+    cta_guidance = _cta_guidance(category)
+    v3_guidance = _v3_publishing_guidance(rule_context or {})
     normalized_mode_type = _normalize_mode_type(mode_type)
     limits = _body_structure_limits(word_limit)
     sec = _get_section_names(language)
@@ -169,6 +257,12 @@ def build_strategy_prompt(
             Rule context:
             {rule_brief}
 
+            {ai_answer_guidance}
+
+            {cta_guidance}
+
+            {v3_guidance}
+
             Return strict JSON only:
             {{
               "intent": "",
@@ -187,7 +281,13 @@ def build_strategy_prompt(
               "compliance_notes": ["", ""],
               "internal_link_plan": [
                 {{"label": "", "placement": "", "url_hint": ""}}
-              ]
+              ],
+              "cta_plan": {{
+                "reader_scenario": "",
+                "next_action": "",
+                "value": "",
+                "conclusion_angle": ""
+              }}
             }}
 
             Requirements:
@@ -199,15 +299,19 @@ def build_strategy_prompt(
               3. Use exactly one H1
               4. Structure should be H1, introduction, H2/H3 body, conclusion, FAQ
               5. FAQ should contain {limits["faq_count"]} natural follow-up questions for this target length
-              6. Titles should reflect the core topic naturally
+              6. When brand/product info is provided, include one FAQ question that captures product or solution fit, such as when the named option is a logical choice and when extra checking is needed
+              7. Titles should reflect the core topic naturally
             - Outline should target approximately {word_limit} words/characters of textual content
             - HARD LIMIT: the outline must contain no more than {limits["max_h2"]} body H2 sections — combine related subtopics into fewer sections rather than adding more H2s
             - HARD LIMIT: use no more than {limits["max_h3"]} body H3 subsections in total
+            - In plain terms: use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections
             - Only use H3 when it materially improves clarity; do not add H3 by default
             - Each body H2 section should be concise — plan for one to two short paragraphs per section, not multi-paragraph deep dives
             - Headings should be specific, benefit-driven, and not generic
             - Link opportunities should describe relevant anchor ideas and use provided URLs only when available
             - Internal link plan should call out the best early-link placement when rule context requires it
+            - Build cta_plan around the reader's scenario, the next action they should take, and the value they gain from that action
+            - If a product or solution is a candidate recommendation, plan one sentence explaining why it is worth comparing in this scenario, especially when staged adoption, limited budget, uncertain incentives, or later expansion affects the decision
             - Compliance notes should reflect disclaimers, compatibility notes, or banned-term constraints
             - Image briefs should describe helpful supporting visuals and mention topic placement advice
             - If the keyword signals a comparison or alternatives intent (e.g., contains "vs", "versus", "alternatives", "best X for Y", "compare"), do not recommend or name specific competing brands or products in the outline or writing suggestions; compare based on neutral criteria, use-case fit, and objective specifications instead
@@ -224,6 +328,12 @@ def build_strategy_prompt(
 
         Rule context:
         {rule_brief}
+
+        {ai_answer_guidance}
+
+        {cta_guidance}
+
+        {v3_guidance}
 
         Return strict JSON only:
         {{
@@ -246,6 +356,12 @@ def build_strategy_prompt(
           "internal_link_plan": [
             {{"label": "", "placement": "", "url_hint": ""}}
           ],
+          "cta_plan": {{
+            "reader_scenario": "",
+            "next_action": "",
+            "value": "",
+            "conclusion_angle": ""
+          }},
           "compliance_notes": ["", ""],
           "schema_suggestions": ["Article"],
           "trust_signals": ["author byline", "publish date", "last updated", "references"]
@@ -271,19 +387,24 @@ def build_strategy_prompt(
           5. one H2 named {sec['faq']}
           6. one H2 named {sec['conclusion']}
         - The outline field must describe body sections only
+        - In plain terms: use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections
         - HARD LIMIT: the outline must contain no more than {limits["max_h2"]} body H2 sections — combine related subtopics into fewer sections rather than adding more H2s
         - HARD LIMIT: use no more than {limits["max_h3"]} body H3 subsections in total
         - Only use H3 when it materially improves clarity; do not add H3 by default
         - Each body H2 section should be concise — plan for one to two short paragraphs per section, not multi-paragraph deep dives
         - FAQ questions must be practical, natural, and closely related to the keyword and the questions readers would ask in daily decision-making
         - FAQ should contain {limits["faq_count"]} natural user questions for this target length
+        - When brand/product info is provided, include one FAQ question that captures product or solution fit, such as when the named option is a logical choice and when extra checking is needed; answer with scenario conditions, not promotional claims
         - Do not plan or mention TL;DR, update log, appendix, or extra top-level sections outside the fixed structure
         - Headings should mirror user questions and retrieval intents
         - Do not invent external sources; describe the type of evidence needed
         - If AI Q&A reference answer or adopted source links are provided in rule context, use them as GEO research input and cite/link only the provided source URLs when appropriate
+        - If AI Q&A data includes a product fit judgment, plan sections that separate: technical feasibility, best-fit scenarios, poor-fit scenarios, reasons/constraints, safer alternatives, and evidence limits
         - Meta title should stay within 60 characters
         - Meta description should stay within 160 characters
         - If internal links are required, plan them near the top of the article
+        - Build cta_plan around the reader's scenario, the next action they should take, and the value they gain from that action
+        - If a product or solution is a candidate recommendation, plan one sentence explaining why it is worth comparing in this scenario, especially when staged adoption, limited budget, uncertain incentives, or later expansion affects the decision
         - Avoid third-party narrator phrasing such as "According to official docs" or "through official documentation we can conclude"
         - If the keyword signals a comparison or alternatives intent (e.g., contains "vs", "versus", "alternatives", "best X for Y", "compare"), do not recommend or name specific competing brands or products in the outline or writing suggestions; compare based on neutral criteria, use-case fit, and objective specifications instead
         - For the reference_plan field, list authoritative local organizations relevant to the country/market context (e.g., government agencies, national standards institutes, industry regulators, official academic institutions). Each entry should follow the format: "<Organization Name> — <Document or Publication Title> — <URL>". Do not use generic placeholder descriptions.
@@ -303,6 +424,9 @@ def build_draft_prompt(
     mode_type: int = MODE_TYPE_KEYWORD,
 ) -> str:
     rule_brief = _build_rule_brief(rule_context or {})
+    ai_answer_guidance = _ai_answer_data_guidance(category)
+    cta_guidance = _cta_guidance(category)
+    v3_guidance = _v3_publishing_guidance(rule_context or {})
     normalized_mode_type = _normalize_mode_type(mode_type)
     limits = _body_structure_limits(word_limit)
     sec = _get_section_names(language)
@@ -344,6 +468,12 @@ def build_draft_prompt(
             Rule context:
             {rule_brief}
 
+            {ai_answer_guidance}
+
+            {cta_guidance}
+
+            {v3_guidance}
+
             Requirements:
             - Return pure HTML only
             - Use h1, h2, h3, p, ul, li, strong, a tags only
@@ -358,14 +488,19 @@ def build_draft_prompt(
             - {draft_word_instruction}
             - HARD LIMIT: use exactly {limits["max_h2"]} body H2 sections maximum — do not add more H2 sections even if the topic seems to warrant it
             - HARD LIMIT: use at most {limits["max_h3"]} H3 subsections total across the entire article
+            - In plain terms: use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections
             - Only use H3 when it materially improves clarity; do not add H3 by default
             - Each body H2 section should contain at most two short paragraphs; avoid long multi-paragraph sections
             - When mode_type=1, keep the main keyword naturally present in H1, intro, and conclusion
             - Paragraphs should stay compact and readable
             - When mode_type=1, use long-tail keywords naturally and never stuff them
             - If brand/product info is provided, integrate it naturally without turning the article into a sales page
+            - When brand/product info is provided, include one FAQ question about when the named product, model, or solution is a logical option; answer with suitable scenarios, unsuitable scenarios, and what to verify first
+            - When presenting any product or solution as a candidate, explain why it is worth comparing for this reader's scenario before asking the reader to take the next step
             - Use provided internal URLs when the strategy includes them; otherwise do not invent URLs
             - Respect all compliance notes, disclaimers, and compatibility constraints from the rule context
+            - When AI Q&A data is present, include the distinction between what the AI answer recommends, what it only explores, and what cannot be inferred from the data
+            - Use strategy.cta_plan when present; the conclusion must summarize the core judgment and include one soft CTA tied to the reader's scenario, next action, and practical value
             {mode_requirements}
             """
         ).strip()
@@ -381,6 +516,12 @@ def build_draft_prompt(
         {strategy}
         Rule context:
         {rule_brief}
+
+        {ai_answer_guidance}
+
+        {cta_guidance}
+
+        {v3_guidance}
 
         Requirements:
         - Return pure HTML only
@@ -398,9 +539,11 @@ def build_draft_prompt(
         - {sec['faq']} must appear immediately before {sec['conclusion']}
         - HARD LIMIT: use exactly {limits["max_h2"]} body H2 sections maximum — do not add extra H2 sections beyond this count
         - HARD LIMIT: use at most {limits["max_h3"]} H3 subsections total across the entire article
+        - In plain terms: use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections
         - Only use H3 when it materially improves clarity; do not add H3 by default
         - Each body H2 section should contain at most two short paragraphs; avoid long multi-paragraph sections
         - {sec['faq']} must contain {limits["faq_count"]} H3 questions, and each question must be a realistic user question related to {keyword}
+        - When brand/product info is provided, one FAQ question must ask when the named product, model, or solution is a logical option; answer with suitable scenarios, unsuitable scenarios, and what to verify first
         - Each FAQ question must be followed by one concise answer paragraph
         - {sec['conclusion']} must be the final H2 section
         - Do not add TL;DR, update log, appendix, or any extra top-level section outside the fixed structure
@@ -409,10 +552,13 @@ def build_draft_prompt(
         - Make headings easy for AI systems to quote or summarize
         - For the References and Evidence to Verify section, cite real authoritative local organizations relevant to the country/market (e.g., government agencies, national standards institutes, industry regulators, official academic institutions). Each reference entry must include the organization name, document or publication title, and a real URL. Do not use placeholder text or invent sources.
         - Use AI Q&A reference answer and adopted source links from rule context as GEO reference material when provided
+        - When AI Q&A data is present, explicitly separate answer, conditions, constraints, alternatives, recommendation tiers, and evidence limits
         - If brand/product info is provided, keep entity mentions consistent and verifiable
+        - When presenting any product or solution as a candidate, explain why it is worth comparing for this reader's scenario before asking the reader to take the next step
         - Use direct explanatory voice. Do not write in a third-party narrator tone such as "According to official docs", "Based on official documentation", or "through official documentation we can conclude"
         - If the keyword signals a comparison or alternatives intent (e.g., contains "vs", "versus", "alternatives", "best X for Y", "compare"), do not name or recommend specific competing brands or products anywhere in the article body; compare only on neutral criteria, use-case fit, and objective specifications
         - Respect all compliance notes, disclaimers, and compatibility constraints from the rule context
+        - Use strategy.cta_plan when present; the conclusion must summarize the core judgment and include one soft CTA tied to the reader's scenario, next action, and practical value
         {mode_requirements}
         """
     ).strip()
@@ -433,6 +579,9 @@ def build_polish_prompt(
         else "Improve citability, answer extraction, trust signals, and structural consistency."
     )
     rule_brief = _build_rule_brief(rule_context or {})
+    ai_answer_guidance = _ai_answer_data_guidance(category)
+    cta_guidance = _cta_guidance(category)
+    v3_guidance = _v3_publishing_guidance(rule_context or {})
     sec = _get_section_names(language)
     strict_lang = _strict_language_note(language)
     normalized_mode_type = _normalize_mode_type(mode_type)
@@ -451,8 +600,10 @@ def build_polish_prompt(
         if normalized_mode_type == MODE_TYPE_OUTLINE
         else ""
     )
+    density_notes = _body_structure_limits(word_limit)
+    _draft_word_instruction, polish_word_instruction = _word_count_instructions(word_limit, density_notes)
     geo_requirements = (
-        """
+        f"""
         - For GEO articles, the final structure must be exactly:
           1. one H1 title
           2. an opening paragraph starting with bold "{sec['quick_answer_prefix']}:" (inline, not a separate H2 heading), followed by 1-2 short paragraphs
@@ -461,6 +612,7 @@ def build_polish_prompt(
           5. one H2 named {sec['faq']}
           6. one H2 named {sec['conclusion']} as the final section
         - {sec['faq']} must stay immediately before {sec['conclusion']} and contain {density_notes["faq_count"]} natural user questions related to the target keyword
+        - If a named product, model, or solution appears, keep or add one natural FAQ that explains when it is a logical option and when extra verification is needed, without adding a new top-level section
         - Keep all headings and visible text in the requested language
         - {strict_lang if strict_lang else "Do not mix languages within the article."}
         - Unless the article has a clear structural problem, do not add, remove, reorder, or rename sections
@@ -474,8 +626,6 @@ def build_polish_prompt(
         if category == "geo"
         else ""
     )
-    density_notes = _body_structure_limits(word_limit)
-    _draft_word_instruction, polish_word_instruction = _word_count_instructions(word_limit, density_notes)
     return dedent(
         f"""
         You are an expert editor.
@@ -490,9 +640,17 @@ def build_polish_prompt(
         - {topic_requirement}
         - {polish_word_instruction}
         - HARD LIMIT: the article must have no more than {density_notes["max_h2"]} body H2 sections and {density_notes["max_h3"]} body H3 subsections — if the draft exceeds this, merge or remove the least essential sections
+        - For this target length, keep the body within {density_notes["max_h2"]} H2 sections and {density_notes["max_h3"]} H3 subsections total; avoid adding new headings
         - Do not add new headings; shorten or merge existing sections to meet the word count limit
+        - If the article names a product, model, or first-party solution, ensure the copy explains why it is worth comparing for the user's scenario before the final CTA
+        - Make the final CTA action-specific by naming the comparison or verification dimensions the reader should check next
         - Keep compliance with the following rule context:
         {rule_brief}
+        - Apply this AI-answer-data guidance where relevant:
+        {ai_answer_guidance}
+        - Apply this CTA and conclusion guidance where relevant:
+        {cta_guidance}
+        {v3_guidance}
         {geo_requirements}
         {mode_requirement}
         - Return HTML only

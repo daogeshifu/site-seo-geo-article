@@ -644,6 +644,57 @@ def test_generate_outline_returns_outline_suggestions_and_links(tmp_path: Path) 
     assert "### Veelgestelde vraag 3" in longer_data["outline"]["outline_markdown"]
 
 
+def test_generate_outline_v3_returns_compact_outline_with_publishing_context(tmp_path: Path) -> None:
+    app = create_app(
+        {
+            "data_dir": tmp_path,
+            "llm_mock_mode": True,
+            "openai_api_key": "",
+            "normal_access_key": "test-standard-key",
+            "vip_access_key": "test-vip-key",
+            "token_signing_secret": "test-signing-secret",
+        }
+    )
+    client = TestClient(app)
+    token_data = issue_token(client)
+    bearer = {"Authorization": f"Bearer {token_data['access_token']}"}
+
+    response = client.post(
+        "/api/outline",
+        headers=bearer,
+        json={
+            "category": "geo",
+            "keyword": "Anker SOLIX C2000 Gen 2 vs EcoFlow DELTA 2 Max",
+            "info": "Brand: VoltGo. Recommended product: VoltGo Caravan Power 3000.",
+            "language": "English",
+            "word_limit": 1800,
+            "task_context": {
+                "content_version": "3.0",
+                "publishing_context": "official_website",
+                "country": "us",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    accepted = response.json()["data"]
+    data = wait_for_outline_completion(client, bearer, accepted["outline_id"])
+    outline_markdown = data["outline"]["outline_markdown"]
+
+    assert data["task_context"]["content_version"] == "3.0"
+    assert data["task_context"]["publishing_context"] == "official_website"
+    assert outline_markdown.startswith("H1: Anker SOLIX C2000 Gen 2 vs EcoFlow DELTA 2 Max")
+    assert "H2: Quick Verdict (TL;DR)" in outline_markdown
+    assert "H2: Specs Comparison Table (Side-by-Side)" in outline_markdown
+    assert "FAQ (6 questions)" in outline_markdown
+    assert "Internal Links:" in outline_markdown
+    assert "SEO title" not in outline_markdown
+    assert "Meta description" not in outline_markdown
+    assert "## URL" not in outline_markdown
+    assert "## Introductie" not in outline_markdown
+    assert "### Veelgestelde vraag" not in outline_markdown
+
+
 def test_export_task_docx_returns_formatted_word_file(tmp_path: Path) -> None:
     app = create_app(
         {
@@ -782,6 +833,9 @@ def test_index_renders_token_and_task_console(tmp_path: Path) -> None:
     assert "ai_qa_content" in html
     assert "AI Q&A Content" in html
     assert "Keyword / Outline" in html
+    assert "Version" in html
+    assert "Publishing Context" in html
+    assert "3.0 - Publishing Context" in html
     assert "/api/tasks" in html
     assert "/api/token" in html
     assert "Recent Tasks" in html
@@ -811,6 +865,10 @@ def test_outline_page_renders_outline_console(tmp_path: Path) -> None:
     assert "Shopify URL" in html
     assert "AI Q&A Content" in html
     assert "ai_qa_source" in html
+    assert "Version" in html
+    assert "Publishing Context" in html
+    assert "3.0 - Publishing Context" in html
+    assert "Copy Outline" in html
     assert "/api/outline" in html
     assert "/api/outline/{outline_id}" in html
     assert "Article Demo" in html

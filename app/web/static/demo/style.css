@@ -294,6 +294,10 @@ label {
   color: var(--muted);
 }
 
+.field-disabled {
+  opacity: 0.62;
+}
+
 input, select, textarea, button {
   font: inherit;
 }

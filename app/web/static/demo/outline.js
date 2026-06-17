@@ -17,6 +17,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const apiJson = document.getElementById("api-json");
   const languageSelect = document.getElementById("language-select");
   const countrySelect = document.getElementById("country-select");
+  const contentVersionSelect = document.getElementById("content-version-select");
+  const publishingContextSelect = document.getElementById("publishing-context-select");
+  const publishingContextField = document.getElementById("publishing-context-field");
   let accessToken = "";
   let pollTimer = null;
   const languageCountryMap = {
@@ -151,6 +154,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function syncContentVersion() {
+    if (!contentVersionSelect || !publishingContextSelect || !publishingContextField) {
+      return;
+    }
+    const isV3 = contentVersionSelect.value === "3.0";
+    publishingContextSelect.disabled = !isV3;
+    publishingContextField.classList.toggle("field-disabled", !isV3);
+  }
+
   function renderOutlineResult(task) {
     const outline = task.outline || {};
     outlineMeta.textContent = `Outline ${task.outline_id || task.task_id} · ${task.status}`;
@@ -227,6 +239,8 @@ document.addEventListener("DOMContentLoaded", () => {
       keyword: formData.get("keyword"),
       info: formData.get("info") || "",
       task_context: {
+        content_version: formData.get("content_version") || "2.0",
+        publishing_context: formData.get("publishing_context") || "official_website",
         country: formData.get("country") || "",
         requires_shopify_link: formData.get("requires_shopify_link") === "true",
         shopify_url: formData.get("shopify_url") || "",
@@ -287,5 +301,9 @@ document.addEventListener("DOMContentLoaded", () => {
     languageSelect.addEventListener("change", () => syncLanguageAndCountry("language"));
     countrySelect.addEventListener("change", () => syncLanguageAndCountry("country"));
     syncLanguageAndCountry("language");
+  }
+  if (contentVersionSelect) {
+    contentVersionSelect.addEventListener("change", syncContentVersion);
+    syncContentVersion();
   }
 });
