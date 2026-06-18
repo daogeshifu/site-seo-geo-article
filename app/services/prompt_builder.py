@@ -201,6 +201,59 @@ def _v3_publishing_guidance(rule_context: dict[str, Any]) -> str:
     )
 
 
+def _competitor_policy(rule_context: dict[str, Any], *, scope: str) -> str:
+    """Return the comparison/competitor-naming rule, conditioned on publishing context.
+
+    For content version 3.0 the comparison-intent rule adapts to the publishing context:
+    third_party_media may name and compare specific competing brands; conversion_page keeps
+    the focus on the primary product but may compare on objective criteria; official_website
+    (and every other case, including version 2.0) suppresses competitor names. ``scope`` is
+    "strategy" or "draft".
+    """
+    context = rule_context.get("context") or {}
+    publishing_context = str(context.get("publishing_context") or "official_website")
+    is_v3 = str(context.get("content_version") or "2.0") == "3.0"
+    trigger = (
+        'If the keyword signals a comparison or alternatives intent (e.g., contains "vs", '
+        '"versus", "alternatives", "best X for Y", "compare"), '
+    )
+    if is_v3 and publishing_context == "third_party_media":
+        if scope == "strategy":
+            return (
+                trigger
+                + "plan a balanced comparison that may name specific competing brands or products; "
+                "give each candidate clear criteria, trade-offs, and evidence, and do not default to a single-brand recommendation"
+            )
+        return (
+            trigger
+            + "you may name and compare specific competing brands or products in the article body; "
+            "keep the comparison balanced with clear criteria, trade-offs, and evidence, and do not collapse it into a single-brand recommendation"
+        )
+    if is_v3 and publishing_context == "conversion_page":
+        if scope == "strategy":
+            return (
+                trigger
+                + "keep the comparison centered on the primary/named product and the reader's buying decision; "
+                "you may contrast it against alternative categories or objective criteria, but do not recommend or promote specific competing brands as the better choice; keep claims evidence-based without pressure"
+            )
+        return (
+            trigger
+            + "keep the article body centered on the primary/named product and the reader's buying decision; "
+            "you may compare on objective criteria, fit, and proof points, but do not name competing brands as recommended alternatives; keep the CTA evidence-based and free of exaggerated claims or pressure"
+        )
+    if scope == "strategy":
+        return (
+            trigger
+            + "do not recommend or name specific competing brands or products in the outline or writing suggestions; "
+            "compare based on neutral criteria, use-case fit, and objective specifications instead"
+        )
+    return (
+        trigger
+        + "do not name or recommend specific competing brands or products anywhere in the article body; "
+        "compare only on neutral criteria, use-case fit, and objective specifications"
+    )
+
+
 def build_strategy_prompt(
     category: str,
     keyword: str,
@@ -214,6 +267,7 @@ def build_strategy_prompt(
     ai_answer_guidance = _ai_answer_data_guidance(category)
     cta_guidance = _cta_guidance(category)
     v3_guidance = _v3_publishing_guidance(rule_context or {})
+    competitor_policy = _competitor_policy(rule_context or {}, scope="strategy")
     normalized_mode_type = _normalize_mode_type(mode_type)
     limits = _body_structure_limits(word_limit)
     sec = _get_section_names(language)
@@ -314,7 +368,7 @@ def build_strategy_prompt(
             - If a product or solution is a candidate recommendation, plan one sentence explaining why it is worth comparing in this scenario, especially when staged adoption, limited budget, uncertain incentives, or later expansion affects the decision
             - Compliance notes should reflect disclaimers, compatibility notes, or banned-term constraints
             - Image briefs should describe helpful supporting visuals and mention topic placement advice
-            - If the keyword signals a comparison or alternatives intent (e.g., contains "vs", "versus", "alternatives", "best X for Y", "compare"), do not recommend or name specific competing brands or products in the outline or writing suggestions; compare based on neutral criteria, use-case fit, and objective specifications instead
+            - {competitor_policy}
             {mode_requirements}
             """
         ).strip()
@@ -406,7 +460,7 @@ def build_strategy_prompt(
         - Build cta_plan around the reader's scenario, the next action they should take, and the value they gain from that action
         - If a product or solution is a candidate recommendation, plan one sentence explaining why it is worth comparing in this scenario, especially when staged adoption, limited budget, uncertain incentives, or later expansion affects the decision
         - Avoid third-party narrator phrasing such as "According to official docs" or "through official documentation we can conclude"
-        - If the keyword signals a comparison or alternatives intent (e.g., contains "vs", "versus", "alternatives", "best X for Y", "compare"), do not recommend or name specific competing brands or products in the outline or writing suggestions; compare based on neutral criteria, use-case fit, and objective specifications instead
+        - {competitor_policy}
         - For the reference_plan field, list authoritative local organizations relevant to the country/market context (e.g., government agencies, national standards institutes, industry regulators, official academic institutions). Each entry should follow the format: "<Organization Name> — <Document or Publication Title> — <URL>". Do not use generic placeholder descriptions.
         {mode_requirements}
         """
@@ -427,6 +481,7 @@ def build_draft_prompt(
     ai_answer_guidance = _ai_answer_data_guidance(category)
     cta_guidance = _cta_guidance(category)
     v3_guidance = _v3_publishing_guidance(rule_context or {})
+    competitor_policy = _competitor_policy(rule_context or {}, scope="draft")
     normalized_mode_type = _normalize_mode_type(mode_type)
     limits = _body_structure_limits(word_limit)
     sec = _get_section_names(language)
@@ -556,7 +611,7 @@ def build_draft_prompt(
         - If brand/product info is provided, keep entity mentions consistent and verifiable
         - When presenting any product or solution as a candidate, explain why it is worth comparing for this reader's scenario before asking the reader to take the next step
         - Use direct explanatory voice. Do not write in a third-party narrator tone such as "According to official docs", "Based on official documentation", or "through official documentation we can conclude"
-        - If the keyword signals a comparison or alternatives intent (e.g., contains "vs", "versus", "alternatives", "best X for Y", "compare"), do not name or recommend specific competing brands or products anywhere in the article body; compare only on neutral criteria, use-case fit, and objective specifications
+        - {competitor_policy}
         - Respect all compliance notes, disclaimers, and compatibility constraints from the rule context
         - Use strategy.cta_plan when present; the conclusion must summarize the core judgment and include one soft CTA tied to the reader's scenario, next action, and practical value
         {mode_requirements}
