@@ -609,7 +609,8 @@ def test_generate_outline_returns_outline_suggestions_and_links(tmp_path: Path) 
     assert data["provider"] == "openai:gpt-4.1-mini"
     assert data["word_limit"] == 900
     assert data["outline"]["generation_mode"] == "mock"
-    assert "Quick Answer" in data["outline"]["outline_markdown"]
+    assert "Kort antwoord" in data["outline"]["outline_markdown"]
+    assert "## Kort antwoord" not in data["outline"]["outline_markdown"]
     assert "## Welke oplossing past het best bij welke situatie?" not in data["outline"]["outline_markdown"]
     assert "### Veelgestelde vraag 3" not in data["outline"]["outline_markdown"]
     assert len(data["outline"]["writing_suggestions"]) >= 3
@@ -684,7 +685,8 @@ def test_generate_outline_v3_returns_compact_outline_with_publishing_context(tmp
     assert data["task_context"]["content_version"] == "3.0"
     assert data["task_context"]["publishing_context"] == "official_website"
     assert outline_markdown.startswith("H1: Anker SOLIX C2000 Gen 2 vs EcoFlow DELTA 2 Max")
-    assert "H2: Quick Verdict (TL;DR)" in outline_markdown
+    assert "Quick Verdict (TL;DR)" not in outline_markdown
+    assert "TL;DR" not in outline_markdown
     assert "H2: Specs Comparison Table (Side-by-Side)" in outline_markdown
     assert "FAQ (6 questions)" in outline_markdown
     assert "Internal Links:" in outline_markdown

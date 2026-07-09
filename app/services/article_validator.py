@@ -8,13 +8,36 @@ from typing import Any
 H1_RE = re.compile(r"<h1\b", re.IGNORECASE)
 FIRST_H1_RE = re.compile(r"<h1\b[^>]*>.*?</h1>", re.IGNORECASE | re.DOTALL)
 P_RE = re.compile(r"<p>(.*?)</p>", re.IGNORECASE | re.DOTALL)
-FAQ_RE = re.compile(r"<h[23]>\s*(?:FAQ|Veelgestelde\s+vragen)\s*</h[23]>", re.IGNORECASE)
+FAQ_RE = re.compile(r"<h[23]>\s*(?:FAQ|Veelgestelde\s+vragen|常见问题|常見問題)\s*</h[23]>", re.IGNORECASE)
 REFERENCES_RE = re.compile(
-    r"<h[23]>\s*(?:References?(?:\s+and\s+Evidence\s+to\s+Verify)?|Bronnen(?:\s+en\s+controlepunten)?|Referenties)\s*</h[23]>",
+    r"<h[23]>\s*(?:References?(?:\s+and\s+Evidence\s+to\s+Verify)?|Bronnen(?:\s+en\s+controlepunten)?|Referenties|参考来源(?:与验证要点)?|参考资料)\s*</h[23]>",
     re.IGNORECASE,
 )
-CONCLUSION_RE = re.compile(r"<h2>\s*(?:Conclusion|Conclusie)\s*</h2>", re.IGNORECASE)
+CONCLUSION_RE = re.compile(r"<h2>\s*(?:Conclusion|Conclusie|结论|結論)\s*</h2>", re.IGNORECASE)
 H2_SECTION_RE = re.compile(r"(<h2\b[^>]*>(.*?)</h2>)(.*?)(?=<h2\b|$)", re.IGNORECASE | re.DOTALL)
+
+# Markers that identify a redundant "short answer" heading that must be folded into the
+# inline Quick Answer opening instead of surviving as its own H2. Matched by prefix on the
+# lowercased, whitespace-collapsed heading text, so variants with a trailing clause
+# (e.g. "Kort antwoord: welke kies je") are still caught.
+QUICK_ANSWER_HEADING_MARKERS = (
+    "quick answer",
+    "quick verdict",
+    "quick take",
+    "kort antwoord",
+    "korte samenvatting",
+    "tl;dr",
+    "tldr",
+    "in short",
+    "简而言之",
+    "简要回答",
+    "简答",
+    "一句话",
+)
+
+
+def _is_quick_answer_heading(heading_key: str) -> bool:
+    return any(heading_key.startswith(marker) for marker in QUICK_ANSWER_HEADING_MARKERS)
 
 
 def _get_section_names(language: str) -> dict[str, str]:
@@ -25,6 +48,13 @@ def _get_section_names(language: str) -> dict[str, str]:
             "references": "Bronnen en controlepunten",
             "faq": "Veelgestelde vragen",
             "conclusion": "Conclusie",
+        }
+    if any(kw in lang for kw in ("chinese", "zh", "mandarin", "中文", "简体", "繁體", "繁体")):
+        return {
+            "quick_answer_prefix": "简要回答",
+            "references": "参考来源与验证要点",
+            "faq": "常见问题",
+            "conclusion": "结论",
         }
     return {
         "quick_answer_prefix": "Quick Answer",
@@ -340,25 +370,25 @@ class ArticleValidator:
             content = match.group(3).strip()
             heading_key = re.sub(r"\s+", " ", heading_text.lower())
 
-            if heading_key in {"quick answer", "kort antwoord", "tl;dr"}:
+            if _is_quick_answer_heading(heading_key):
                 if not quick_content:
                     quick_content = content
                 fixes.append("normalized the GEO quick-answer section heading")
                 continue
-            if heading_key in {"faq", "veelgestelde vragen", "update log", "appendix"}:
-                if heading_key in {"faq", "veelgestelde vragen"}:
+            if heading_key in {"faq", "veelgestelde vragen", "常见问题", "常見問題", "update log", "appendix"}:
+                if heading_key in {"faq", "veelgestelde vragen", "常见问题", "常見問題"}:
                     if not faq_content:
                         faq_content = content
                     fixes.append("normalized the GEO FAQ section heading")
                 else:
                     fixes.append(f"removed unsupported GEO section '{heading_text}'")
                 continue
-            if "reference" in heading_key or "citation" in heading_key or "evidence to verify" in heading_key or "bronnen" in heading_key or "referenties" in heading_key:
+            if "reference" in heading_key or "citation" in heading_key or "evidence to verify" in heading_key or "bronnen" in heading_key or "referenties" in heading_key or "参考" in heading_key:
                 if not references_content:
                     references_content = content
                 fixes.append("normalized the GEO references section heading")
                 continue
-            if heading_key in {"conclusion", "conclusie"}:
+            if heading_key in {"conclusion", "conclusie", "结论", "結論"}:
                 if not conclusion_content:
                     conclusion_content = content
                 fixes.append("normalized the GEO conclusion section heading")

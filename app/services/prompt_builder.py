@@ -56,6 +56,13 @@ def _get_section_names(language: str) -> dict[str, str]:
             "faq": "Veelgestelde vragen",
             "conclusion": "Conclusie",
         }
+    if any(kw in lang for kw in ("chinese", "zh", "mandarin", "中文", "简体", "繁體", "繁体")):
+        return {
+            "quick_answer_prefix": "简要回答",
+            "references": "参考来源与验证要点",
+            "faq": "常见问题",
+            "conclusion": "结论",
+        }
     # Default: English
     return {
         "quick_answer_prefix": "Quick Answer",
@@ -441,6 +448,7 @@ def build_strategy_prompt(
           5. one H2 named {sec['faq']}
           6. one H2 named {sec['conclusion']}
         - The outline field must describe body sections only
+        - Do not add a short-answer heading (such as "{sec['quick_answer_prefix']}", "Quick Answer", "Quick Verdict", "TL;DR", or "简而言之") to the outline; the quick answer belongs in the inline opening paragraph, not as an H2/H3 section
         - In plain terms: use at most {limits["max_h2"]} body H2 sections and at most {limits["max_h3"]} body H3 subsections
         - HARD LIMIT: the outline must contain no more than {limits["max_h2"]} body H2 sections — combine related subtopics into fewer sections rather than adding more H2s
         - HARD LIMIT: use no more than {limits["max_h3"]} body H3 subsections in total
@@ -602,6 +610,7 @@ def build_draft_prompt(
         - Each FAQ question must be followed by one concise answer paragraph
         - {sec['conclusion']} must be the final H2 section
         - Do not add TL;DR, update log, appendix, or any extra top-level section outside the fixed structure
+        - If the provided outline contains an early short-answer heading (for example "{sec['quick_answer_prefix']}", "Quick Answer", "Quick Verdict", "TL;DR", or "简而言之"), do NOT keep it as an H2 or H3; fold its content into the inline bold "{sec['quick_answer_prefix']}:" opening paragraph instead. This is the one intended exception to preserving the outline headings.
         - {draft_word_instruction}
         - Use short, extractable paragraphs
         - Make headings easy for AI systems to quote or summarize
@@ -666,6 +675,7 @@ def build_polish_prompt(
           4. one H2 named {sec['references']}
           5. one H2 named {sec['faq']}
           6. one H2 named {sec['conclusion']} as the final section
+        - If an early short-answer heading survived as an H2/H3 (for example "{sec['quick_answer_prefix']}", "Quick Answer", "Quick Verdict", "TL;DR", or "简而言之"), fold its content into the inline bold "{sec['quick_answer_prefix']}:" opening paragraph and remove that heading
         - {sec['faq']} must stay immediately before {sec['conclusion']} and contain {density_notes["faq_count"]} natural user questions related to the target keyword
         - If a named product, model, or solution appears, keep or add one natural FAQ that explains when it is a logical option and when extra verification is needed, without adding a new top-level section
         - Keep all headings and visible text in the requested language

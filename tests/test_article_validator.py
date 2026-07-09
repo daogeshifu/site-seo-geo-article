@@ -44,6 +44,41 @@ def test_geo_validator_normalizes_section_order_and_removes_third_party_voice() 
     assert geo_check["passed"] is True
 
 
+def test_geo_validator_folds_dutch_short_answer_heading_with_suffix() -> None:
+    validator = ArticleValidator()
+    article = {
+        "title": "Draagbare powerstation kiezen",
+        "meta_title": "Draagbare powerstation kiezen",
+        "meta_description": "Demo description",
+        "strategy": {"answer_first_summary": "Kies op capaciteit, piekvermogen en garantie."},
+        "raw_html": """
+<h1>Draagbare powerstation kiezen</h1>
+<h2>Kort antwoord: welke kies je</h2>
+<p>Kies op capaciteit, piekvermogen en garantie voor jouw situatie.</p>
+<h2>Belangrijkste criteria</h2>
+<p>Vergelijk capaciteit en vermogen.</p>
+<p>Let ook op garantie.</p>
+<h2>Conclusie</h2>
+<p>Vergelijk de specificaties voordat je beslist.</p>
+""",
+    }
+
+    normalized = validator.apply(
+        article,
+        category="geo",
+        keyword="draagbare powerstation kiezen",
+        rule_context={},
+        language="Dutch",
+    )
+    html = normalized["raw_html"]
+
+    assert "<h2>Kort antwoord: welke kies je</h2>" not in html
+    assert "<strong>Kort antwoord:</strong>" in html
+    assert html.index("<strong>Kort antwoord:</strong>") < html.index("<h2>Belangrijkste criteria</h2>")
+    geo_check = next(item for item in normalized["audit"]["checks"] if item["name"] == "geo_structure")
+    assert geo_check["passed"] is True
+
+
 def test_geo_validator_keeps_disclaimer_inside_conclusion() -> None:
     validator = ArticleValidator()
     article = {

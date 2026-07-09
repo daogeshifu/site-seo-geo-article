@@ -128,7 +128,7 @@ class OutlineService:
         mode_requirements = (
             "- Optimize for answer-first extraction, AI readability, clear entities, FAQ, citations, and trust signals.\n"
             "- Make the outline directly usable for a GEO article.\n"
-            "- The opening should answer the query quickly.\n"
+            "- The opening should answer the query quickly as inline introductory text; do NOT create a separate 'Quick Answer', 'TL;DR', 'Kort antwoord', or '简而言之' H2/H3 heading for it.\n"
             "- Include sections for sources/verification and FAQ."
             if category == "geo"
             else
@@ -280,7 +280,7 @@ Version 3.0 outline style:
 - Do not include URL, slug, SEO title, meta description, intro notes, section descriptions, Markdown heading syntax (# or ##), or bullets under each H2 inside outline_markdown.
 - Plan {h2_min}-{h2_max} H2 lines only. Use no H3 sections unless the keyword explicitly requires grouped subtopics.
 - Each H2 must be one line only and should include one concise intent note such as: coverage query, user question, comparison angle, proof source, review source, or decision factor.
-- Include a "Quick Verdict (TL;DR)" or equivalent early H2 for comparison, buying-decision, and GEO topics.
+- Put the quick answer / verdict in the inline opening lines under the H1, not as a separate "Quick Verdict", "TL;DR", "Kort antwoord", or "简而言之" H2. Start the body H2 lines with the first real content or coverage section.
 - Include a side-by-side specs or criteria table section when the topic compares products, models, specs, or options.
 - Include review/evidence summary sections only when sources are provided or named in the input; do not invent source names.
 - FAQ should be listed as "FAQ ({faq_count} questions)" rather than writing every FAQ answer in the outline.
@@ -404,7 +404,7 @@ Return strict JSON only:
             else "- Voeg vroeg in het artikel een relevante interne productlink toe."
         )
         quick_answer_instruction = (
-            "- Begin de openingsalinea met **Quick Answer:** gevolgd door een direct antwoord in 2-3 zinnen (geen apart kopje)."
+            "- Begin de openingsalinea met **Kort antwoord:** gevolgd door een direct antwoord in 2-3 zinnen (geen apart kopje)."
             if category == "geo"
             else "- Beantwoord de hoofdvraag in 2-3 zinnen."
         )
@@ -468,7 +468,6 @@ Return strict JSON only:
     ) -> str:
         _h2_min, h2_max, faq_count = _v3_outline_limits(word_limit)
         base_sections = [
-            ("Quick Verdict (TL;DR)", 'coverage query: "which option is the better fit and why"'),
             ("Specs Comparison Table (Side-by-Side)", 'coverage query: "compare specs, capacity, output, charging, price, warranty"'),
             ("Battery Life and Long-Term Value", 'coverage query: "cycle life, warranty, long-term investment"'),
             ("Charging Speed and Real-World Convenience", 'coverage query: "charging time, alternator or solar advantage, daily use"'),
