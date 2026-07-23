@@ -16,6 +16,7 @@ from app.services.llm_client import LLMClient
 from app.services.outline_service import OutlineService
 from app.services.outline_task_service import OutlineTaskService
 from app.services.oss_service import AliyunOSSService
+from app.services.prompt_store import PromptStore, configure_prompt_store
 from app.services.rulebook_service import RulebookService
 from app.services.task_repository import TaskRepository, build_task_repository
 from app.services.task_service import TaskService
@@ -34,6 +35,7 @@ class AppServices:
     writer_service: WriterService
     task_repository: TaskRepository
     task_service: TaskService
+    prompt_store: PromptStore
     templates: Jinja2Templates
 
 
@@ -46,6 +48,7 @@ def build_services(config_override: dict[str, Any] | None = None) -> AppServices
         settings.cache_dir = settings.data_dir / "cache"
         settings.image_dir = settings.data_dir / "images"
 
+    prompt_store = configure_prompt_store(settings.data_dir / "prompts.json")
     cache_service = CacheService(settings.cache_dir)
     doc_export_service = DocExportService(image_dir=settings.image_dir)
     auth_service = AuthService(settings)
@@ -84,5 +87,6 @@ def build_services(config_override: dict[str, Any] | None = None) -> AppServices
         writer_service=writer_service,
         task_repository=task_repository,
         task_service=task_service,
+        prompt_store=prompt_store,
         templates=Jinja2Templates(directory=str(app_root / "web" / "templates")),
     )

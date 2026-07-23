@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ page_title }}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='demo/favicon.svg') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', path='admin/admin.css') }}?v={{ static_version }}" />
+    <script src="{{ url_for('static', path='admin/admin.js') }}?v={{ static_version }}" defer></script>
+  </head>
+  <body>
+    <header class="appbar">
+      <h1>提示词后台</h1>
+      <span class="path">{{ storage_path }}</span>
+      <span class="spacer"></span>
+      <button class="btn btn-small" type="button" id="open-backups">全局备份</button>
+      <a class="btn btn-small" href="/" target="_blank" rel="noreferrer">写作控制台</a>
+      <form method="post" action="/admin/logout">
+        <button class="btn btn-small" type="submit">退出登录</button>
+      </form>
+    </header>
+
+    <div class="layout">
+      <aside class="pane sidebar">
+        <div class="search">
+          <input id="search" type="search" placeholder="搜索名称、编号或内容" autocomplete="off" />
+        </div>
+        <nav class="nav" id="nav"></nav>
+      </aside>
+
+      <section class="pane editor" id="editor">
+        <p class="empty">正在加载提示词…</p>
+      </section>
+    </div>
+
+    <div class="snackbar" id="snackbar"></div>
+
+    <dialog class="dialog" id="backup-dialog">
+      <h2>全局备份</h2>
+      <p class="desc">备份会记录当前<strong>全部提示词</strong>的状态，可随时整体切换回某个时间点。切换前系统会自动先备份一次当前状态。</p>
+      <div class="backup-create">
+        <input type="text" id="backup-note" placeholder="备注（可选），例如：上线前基线" maxlength="120" />
+        <button class="btn btn-filled" type="button" id="create-backup">备份当前状态</button>
+      </div>
+      <div class="backup-list" id="backup-list"></div>
+      <div class="dialog-actions">
+        <button class="btn" type="button" id="close-backups">关闭</button>
+      </div>
+    </dialog>
+
+    <template id="editor-template">
+      <h2 data-role="name"></h2>
+      <p class="desc"><span data-role="key"></span> · <span data-role="description"></span></p>
+      <div class="chips" data-role="chips"></div>
+      <textarea class="prompt" spellcheck="false" data-role="text"></textarea>
+      <div class="actions">
+        <button class="btn btn-filled" data-action="save" disabled>保存</button>
+        <button class="btn btn-outlined" data-action="preview">预览完整提示词</button>
+        <button class="btn" data-action="reset">恢复默认</button>
+        <span class="hint" data-role="hint"></span>
+      </div>
+
+      <div class="preview" data-role="preview" hidden>
+        <h3>预览：把当前保存的提示词组装成实际请求内容</h3>
+        <div class="preview-form">
+          <div class="field">
+            <label>阶段</label>
+            <select data-role="stage">
+              <option value="strategy">文章策略</option>
+              <option value="draft">文章初稿</option>
+              <option value="polish">文章润色</option>
+              <option value="outline">大纲生成</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>类型</label>
+            <select data-role="category">
+              <option value="seo">SEO</option>
+              <option value="geo">GEO</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>输入模式</label>
+            <select data-role="mode_type">
+              <option value="1">关键词</option>
+              <option value="2">大纲</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>内容版本</label>
+            <select data-role="content_version">
+              <option value="2.0">2.0</option>
+              <option value="3.0">3.0</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>关键词</label>
+            <input type="text" data-role="keyword" value="portable home battery" />
+          </div>
+          <div class="field">
+            <label>语言</label>
+            <input type="text" data-role="language" value="English" />
+          </div>
+          <div class="field">
+            <label>目标字数</label>
+            <input type="number" data-role="word_limit" value="1200" min="200" step="100" />
+          </div>
+          <button class="btn btn-outlined btn-small" data-action="run-preview">生成预览</button>
+        </div>
+        <pre class="preview-output" data-role="preview-output">点击“生成预览”查看最终发送给模型的完整提示词。</pre>
+      </div>
+    </template>
+  </body>
+</html>

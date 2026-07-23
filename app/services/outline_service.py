@@ -4,6 +4,7 @@ from typing import Any
 
 from app.services.llm_client import LLMClient
 from app.services.prompt_builder import _ai_answer_data_guidance, _body_structure_limits, _cta_guidance
+from app.services.prompt_store import get_prompt_store
 from app.services.rulebook_service import RulebookService
 from app.utils.common import extract_json_object
 
@@ -125,82 +126,23 @@ class OutlineService:
                 else "Shopify URL requirement: no"
             ),
         ]
-        mode_requirements = (
-            "- Optimize for answer-first extraction, AI readability, clear entities, FAQ, citations, and trust signals.\n"
-            "- Make the outline directly usable for a GEO article.\n"
-            "- The opening should answer the query quickly as inline introductory text; do NOT create a separate 'Quick Answer', 'TL;DR', 'Kort antwoord', or '简而言之' H2/H3 heading for it.\n"
-            "- Include sections for sources/verification and FAQ."
-            if category == "geo"
-            else
-            "- Optimize for search intent alignment, H1/H2/H3 structure, natural keyword coverage, readability, and internal linking.\n"
-            "- Make the outline directly usable for an SEO article.\n"
-            "- Include a strong intro, clear section hierarchy, conclusion, and FAQ."
+        store = get_prompt_store()
+        return store.render(
+            "outline.v2",
+            mode_name=mode_name,
+            keyword=keyword,
+            info_block=info or "No extra business context provided.",
+            language=language,
+            task_context_block="\n".join(f"- {item}" for item in market_notes),
+            link_lines=link_lines,
+            ai_answer_guidance=_ai_answer_data_guidance(category),
+            cta_guidance=_cta_guidance(category),
+            mode_requirements=store.render(f"outline.mode.{'geo' if category == 'geo' else 'seo'}"),
+            word_limit=word_limit,
+            max_h2=limits["max_h2"],
+            max_h3=limits["max_h3"],
+            faq_count=limits["faq_count"],
         )
-        ai_answer_guidance = _ai_answer_data_guidance(category)
-        cta_guidance = _cta_guidance(category)
-        info_block = info or "No extra business context provided."
-        return f"""
-You are a senior {mode_name} content strategist.
-Create a clean article outline plan for the keyword below.
-
-Keyword:
-{keyword}
-
-Business context:
-{info_block}
-
-Language:
-{language}
-
-Task context:
-{chr(10).join(f"- {item}" for item in market_notes)}
-
-Allowed internal links:
-{link_lines}
-
-AI-answer-data writing guidance:
-{ai_answer_guidance}
-
-{cta_guidance}
-
-        Requirements:
-{mode_requirements}
-- Target approximately {word_limit} words/characters of textual content in the final article.
-- For this target length, keep the outline body within {limits["max_h2"]} H2 sections and {limits["max_h3"]} H3 subsections total.
-- Only use H3 when it materially improves clarity; do not add H3 by default.
-- FAQ should contain {limits["faq_count"]} natural questions for this target length.
-- Each body H2 should be substantial enough to support at least two meaningful content blocks in the final article.
-- Keep the outline practical, specific, and commercially relevant without sounding like an ad.
-- Use the business context and country rules when deciding comparison criteria and examples.
-- If a product, model, or first-party solution is introduced as a candidate, plan a short reason explaining why it is worth comparing for this specific reader scenario, using practical factors such as staged adoption, lower upfront commitment, capacity fit, installation requirements, verified specifications, or future expandability when supported by the input.
-- Use AI Q&A reference answer and adopted source links as GEO research input when provided.
-- If AI Q&A data includes product recommendations or explore_more items, distinguish primary recommendations, secondary recommendations, exploratory related items, and internal search queries.
-- Preserve evidence boundaries: do not infer search volume, conversion rate, official approval, or user behavior unless the input data explicitly provides it.
-- Plan the conclusion so it restates the core judgment and ends with a soft CTA built from reader scenario + next action + practical value.
-- For subsidy, local policy uncertainty, budget-sensitive, installation-fit, or product-selection topics, guide the reader to check actual capacity, expandability, installation requirements, and official specifications against their own usage habits, budget, and subsidy situation.
-- Make the CTA action-specific by naming the comparison dimensions: usage, available subsidy, installation conditions, capacity, expandability, and official specifications where relevant.
-- When brand/product info is provided, plan one FAQ question about when the named product, model, or solution is a logical option, and answer with fit conditions plus what needs extra verification.
-- Keep CTAs professional and useful: no hard-sell pressure, exaggerated benefits, or anxiety-driven framing.
-- Only recommend internal links from the allowed list above.
-- If a Shopify URL is required, place it naturally in the early buying-intent section.
-- If the keyword signals a comparison or alternatives intent (e.g., contains "vs", "versus", "alternatives", "best X for Y", "compare"), do not name or recommend specific competing brands or products anywhere in the outline or writing suggestions; base comparisons only on neutral criteria, use-case fit, and objective specifications.
-- For any references or sources section in the outline, plan to cite real authoritative local organizations relevant to the country/market context (e.g., government agencies, national standards institutes, industry regulators, official academic institutions). Each planned reference should include the organization name, document or publication title, and a real URL. Do not use generic placeholder descriptions.
-- Return an outline a writer can use immediately.
-
-Return strict JSON only:
-{{
-  "title": "",
-  "outline_markdown": "",
-  "writing_suggestions": ["", "", ""],
-  "recommended_internal_links": [
-    {{
-      "label": "",
-      "url": "",
-      "reason": ""
-    }}
-  ]
-}}
-""".strip()
 
     def _build_v3_prompt(
         self,
@@ -221,88 +163,33 @@ Return strict JSON only:
             "\n".join(f"- {item['label']}: {item['url']}" for item in available_links)
             or "- No official internal links provided"
         )
-        publishing_notes = {
-            "official_website": (
-                "official_website: first-party brand article. Prioritize the provided brand/product when the input supports it. "
-                "Avoid competitor recommendations unless the keyword explicitly requires comparison; compare competitors only through objective specs, criteria, and fit."
+        if publishing_context not in {"official_website", "third_party_media", "conversion_page"}:
+            publishing_context = "official_website"
+        store = get_prompt_store()
+        return store.render(
+            "outline.v3",
+            mode_name=mode_name,
+            keyword=keyword,
+            info_block=info or "No extra business context provided.",
+            language=language,
+            publishing_note=store.render(f"outline.publishing.{publishing_context}"),
+            country=context.get("country") or "not specified",
+            market=context.get("market") or "not specified",
+            locale=rule_context.get("locale_variant") or language,
+            ai_qa_content=context.get("ai_qa_content") or "not provided",
+            ai_qa_source=context.get("ai_qa_source") or "not provided",
+            shopify_note=(
+                rule_context.get("shopify_url")
+                if rule_context.get("requires_shopify_link") and rule_context.get("shopify_url")
+                else "no"
             ),
-            "third_party_media": (
-                "third_party_media: neutral editorial article. Use balanced comparison, objective criteria, evidence, and clear pros/cons. Competitors or alternatives may be named when relevant."
-            ),
-            "conversion_page": (
-                "conversion_page: buying-decision or landing-page content. Make the primary product, fit scenario, proof points, and CTA clearer, while avoiding exaggerated claims or pressure."
-            ),
-        }
-        ai_answer_guidance = _ai_answer_data_guidance(category)
-        cta_guidance = _cta_guidance(category)
-        info_block = info or "No extra business context provided."
-        return f"""
-You are a senior {mode_name} content strategist.
-Create a version 3.0 article outline.
-
-Keyword:
-{keyword}
-
-Business context:
-{info_block}
-
-Language:
-{language}
-
-Publishing context:
-{publishing_notes.get(publishing_context, publishing_notes["official_website"])}
-
-Task context:
-- Country: {context.get('country') or 'not specified'}
-- Market: {context.get('market') or 'not specified'}
-- Locale: {rule_context.get('locale_variant') or language}
-- AI Q&A reference answer: {context.get('ai_qa_content') or 'not provided'}
-- AI Q&A adopted source links: {context.get('ai_qa_source') or 'not provided'}
-- Shopify URL required: {rule_context.get('shopify_url') if rule_context.get('requires_shopify_link') and rule_context.get('shopify_url') else 'no'}
-
-Allowed internal links:
-{link_lines}
-
-AI-answer-data writing guidance:
-{ai_answer_guidance}
-
-{cta_guidance}
-
-Version 3.0 outline style:
-- Keep the outline compact and high-signal. Do not create a detailed paragraph-by-paragraph writing plan.
-- outline_markdown must be a short line-based skeleton only, not a full SEO brief.
-- Use exactly this output shape inside outline_markdown:
-  H1: ...
-  H2: ... - coverage query: "..."
-  H2: ... - decision factor: "..."
-  FAQ ({faq_count} questions)
-  Internal Links: ...
-- Do not include URL, slug, SEO title, meta description, intro notes, section descriptions, Markdown heading syntax (# or ##), or bullets under each H2 inside outline_markdown.
-- Plan {h2_min}-{h2_max} H2 lines only. Use no H3 sections unless the keyword explicitly requires grouped subtopics.
-- Each H2 must be one line only and should include one concise intent note such as: coverage query, user question, comparison angle, proof source, review source, or decision factor.
-- Put the quick answer / verdict in the inline opening lines under the H1, not as a separate "Quick Verdict", "TL;DR", "Kort antwoord", or "简而言之" H2. Start the body H2 lines with the first real content or coverage section.
-- Include a side-by-side specs or criteria table section when the topic compares products, models, specs, or options.
-- Include review/evidence summary sections only when sources are provided or named in the input; do not invent source names.
-- FAQ should be listed as "FAQ ({faq_count} questions)" rather than writing every FAQ answer in the outline.
-- Internal links should be listed by page type or provided URL label; use only allowed internal links when URLs are provided.
-- If brand/product info is provided, include one H2 or FAQ angle that explains when the named product/model/solution is a logical option.
-- Keep product recommendations scenario-bound. Do not call a product the universal best choice.
-- Return an outline a writer can use immediately, but keep outline_markdown close to the compact example style rather than a detailed plan.
-
-Return strict JSON only:
-{{
-  "title": "",
-  "outline_markdown": "",
-  "writing_suggestions": ["", "", ""],
-  "recommended_internal_links": [
-    {{
-      "label": "",
-      "url": "",
-      "reason": ""
-    }}
-  ]
-}}
-""".strip()
+            link_lines=link_lines,
+            ai_answer_guidance=_ai_answer_data_guidance(category),
+            cta_guidance=_cta_guidance(category),
+            h2_min=h2_min,
+            h2_max=h2_max,
+            faq_count=faq_count,
+        )
 
     def _normalize_payload(
         self,

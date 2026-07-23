@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ page_title }}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='demo/favicon.svg') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', path='admin/admin.css') }}?v={{ static_version }}" />
+  </head>
+  <body>
+    <main class="login-wrap">
+      <form class="login-card" method="post" action="/admin/login">
+        <h1>提示词后台</h1>
+        {% if error %}<p class="error">{{ error }}</p>{% endif %}
+        {% if not password_configured %}
+        <p class="error">服务端未设置 ADMIN_PASSWORD，请在 .env 中配置后重启服务。</p>
+        {% endif %}
+        <input type="password" name="password" placeholder="管理密码" autocomplete="current-password" autofocus />
+        <button class="btn btn-filled" type="submit">登录</button>
+      </form>
+    </main>
+  </body>
+</html>

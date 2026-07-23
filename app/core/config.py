@@ -62,6 +62,8 @@ class Settings:
     vip_access_key: str = ""
     token_signing_secret: str = ""
     token_ttl_seconds: int = 86400
+    admin_password: str = ""
+    admin_session_ttl_seconds: int = 43200
     mysql_host: str = ""
     mysql_port: int = 3306
     mysql_user: str = ""
@@ -142,6 +144,8 @@ class Settings:
             vip_access_key=vip_access_key,
             token_signing_secret=token_signing_secret,
             token_ttl_seconds=max(60, int(os.getenv("TOKEN_TTL_SECONDS", "86400"))),
+            admin_password=os.getenv("ADMIN_PASSWORD", "").strip(),
+            admin_session_ttl_seconds=max(300, int(os.getenv("ADMIN_SESSION_TTL_SECONDS", "43200"))),
             mysql_host=os.getenv("MYSQL_HOST", "").strip(),
             mysql_port=int(os.getenv("MYSQL_PORT", "3306")),
             mysql_user=mysql_user,
