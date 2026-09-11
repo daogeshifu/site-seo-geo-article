@@ -828,20 +828,14 @@ def test_index_renders_token_and_task_console(tmp_path: Path) -> None:
     assert response.status_code == 200
 
     html = response.text
-    assert "Exchange Token" in html
-    assert "Get 1-Day Token" in html
-    assert "content_image_count" in html
-    assert "mode_type" in html
-    assert "ai_qa_content" in html
-    assert "AI Q&A Content" in html
-    assert "Keyword / Outline" in html
-    assert "Version" in html
-    assert "Publishing Context" in html
-    assert "3.0 - Publishing Context" in html
-    assert "/api/tasks" in html
-    assert "/api/token" in html
-    assert "Recent Tasks" in html
-    assert "Outline Demo" in html
+    for marker in [
+        'id="auth-form"', 'id="task-form"', 'id="recent-tasks"',
+        'name="content_image_count"', 'name="mode_type"', 'name="ai_qa_content"',
+        'name="content_version"', 'name="publishing_context"',
+        'id="fullscreen-btn"', 'class="advanced-group full"', 'workspace.js',
+        "访问授权", "生成文章", "大纲规划",
+    ]:
+        assert marker in html
 
 
 def test_outline_page_renders_outline_console(tmp_path: Path) -> None:
@@ -861,19 +855,14 @@ def test_outline_page_renders_outline_console(tmp_path: Path) -> None:
     assert response.status_code == 200
 
     html = response.text
-    assert "SEO / GEO Outline Writer" in html
-    assert "Info" in html
-    assert "Requires Shopify Link" in html
-    assert "Shopify URL" in html
-    assert "AI Q&A Content" in html
-    assert "ai_qa_source" in html
-    assert "Version" in html
-    assert "Publishing Context" in html
-    assert "3.0 - Publishing Context" in html
-    assert "Copy Outline" in html
-    assert "/api/outline" in html
-    assert "/api/outline/{outline_id}" in html
-    assert "Article Demo" in html
+    for marker in [
+        'id="outline-form"', 'id="copy-outline-btn"', 'id="outline-output"',
+        'name="info"', 'name="requires_shopify_link"', 'name="shopify_url"',
+        'name="ai_qa_source"', 'name="content_version"', 'name="publishing_context"',
+        'id="fullscreen-btn"', 'class="advanced-group full"', 'workspace.js',
+        "生成大纲", "文章创作",
+    ]:
+        assert marker in html
 
 
 def test_openapi_only_exposes_task_endpoints(tmp_path: Path) -> None:

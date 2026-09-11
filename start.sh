@@ -1,99 +1,95 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
-cd "$(dirname "$0")"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_DIR="${VENV_DIR:-${PROJECT_DIR}/.venv}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+ENV_FILE="${ENV_FILE:-${PROJECT_DIR}/.env}"
+REQUIREMENTS_FILE="${PROJECT_DIR}/requirements.txt"
+REQUIREMENTS_STAMP="${VENV_DIR}/.requirements.sha256"
 
-if [ ! -d ".venv" ]; then
-  echo ">>> No virtualenv found, creating .venv ..."
-  python3 -m venv .venv
+cd "${PROJECT_DIR}"
+
+if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
+  echo ">>> Error: ${PYTHON_BIN} was not found. Install Python 3.10+ first." >&2
+  exit 1
+fi
+
+if ! "${PYTHON_BIN}" -c 'import sys; raise SystemExit(sys.version_info < (3, 10))'; then
+  echo ">>> Error: Python 3.10 or newer is required." >&2
+  exit 1
+fi
+
+if [ ! -x "${VENV_DIR}/bin/python" ]; then
+  echo ">>> Creating virtual environment: ${VENV_DIR}"
+  "${PYTHON_BIN}" -m venv "${VENV_DIR}"
 fi
 
 # shellcheck disable=SC1091
-source .venv/bin/activate
+source "${VENV_DIR}/bin/activate"
 
-echo ">>> Installing dependencies..."
-python -m pip install -q -r requirements.txt
+REQUIREMENTS_HASH="$(python -c 'import hashlib, pathlib, sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())' "${REQUIREMENTS_FILE}")"
+INSTALLED_HASH="$(cat "${REQUIREMENTS_STAMP}" 2>/dev/null || true)"
+if [ "${REQUIREMENTS_HASH}" != "${INSTALLED_HASH}" ] || ! python -m pip check >/dev/null 2>&1; then
+  echo ">>> Installing Python dependencies..."
+  python -m pip install -r "${REQUIREMENTS_FILE}"
+  printf '%s\n' "${REQUIREMENTS_HASH}" > "${REQUIREMENTS_STAMP}"
+else
+  echo ">>> Python dependencies are up to date."
+fi
 
-if [ -f ".env" ]; then
-  echo ">>> Loading .env ..."
+if [ -f "${ENV_FILE}" ]; then
+  echo ">>> Loading ${ENV_FILE}"
   set -a
   # shellcheck disable=SC1091
-  source .env
+  source "${ENV_FILE}"
   set +a
+else
+  echo ">>> .env not found; using development defaults."
+  echo ">>> Tip: cp .env.example .env"
 fi
 
 HOST="${FLASK_HOST:-0.0.0.0}"
 PORT="${FLASK_PORT:-8028}"
 DEBUG_FLAG="${FLASK_DEBUG:-true}"
-IS_PROD="${IS_PROD:-N}"
-AUTO_KILL_PORT="${AUTO_KILL_PORT:-N}"
 
-find_free_port() {
-  local port="$1"
-  while lsof -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; do
-    port=$((port + 1))
-  done
-  echo "$port"
-}
-
-CURRENT_PIDS="$(lsof -ti :"${PORT}" 2>/dev/null || true)"
-if [ -n "${CURRENT_PIDS:-}" ]; then
-  if [ -t 0 ]; then
-    echo ">>> Port ${PORT} is already in use by PID(s): ${CURRENT_PIDS}"
-    read -r -p ">>> Close the existing process and keep using port ${PORT}? [y/N] " CLOSE_PORT || true
-  else
-    CLOSE_PORT="${AUTO_KILL_PORT:-N}"
-    echo ">>> Port ${PORT} is already in use by PID(s): ${CURRENT_PIDS}"
-    echo ">>> Non-interactive shell detected, using AUTO_KILL_PORT=${CLOSE_PORT}"
-  fi
-
-  if [[ "${CLOSE_PORT:-N}" =~ ^[Yy]$ ]]; then
-    echo ">>> Killing processes using port ${PORT}: ${CURRENT_PIDS}"
-    echo "${CURRENT_PIDS}" | xargs kill -9
-    sleep 1
-  else
-    NEXT_PORT="$(find_free_port "$PORT")"
-    echo ">>> Switching to available port ${NEXT_PORT} instead."
-    PORT="${NEXT_PORT}"
-  fi
+if ! [[ "${PORT}" =~ ^[0-9]+$ ]] || [ "${PORT}" -lt 1 ] || [ "${PORT}" -gt 65535 ]; then
+  echo ">>> Error: FLASK_PORT must be an integer between 1 and 65535." >&2
+  exit 1
 fi
 
-if [ -t 0 ]; then
-  read -r -p ">>> Start in background mode? [y/N] " IS_PROD_INPUT || true
-  if [[ "${IS_PROD_INPUT:-N}" =~ ^[Yy]$ ]]; then
-    IS_PROD="Y"
-  else
-    IS_PROD="N"
-  fi
+if ! python - "${HOST}" "${PORT}" <<'PY'
+import socket
+import sys
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    try:
+        sock.bind((sys.argv[1], int(sys.argv[2])))
+    except OSError:
+        raise SystemExit(1)
+PY
+then
+  echo ">>> Error: port ${PORT} is already in use." >&2
+  echo ">>> Stop the existing process or set another port in .env, for example FLASK_PORT=8029." >&2
+  exit 1
+fi
+
+UVICORN_ARGS=(app.main:app --host "${HOST}" --port "${PORT}")
+if [[ "${DEBUG_FLAG}" =~ ^([Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss])$ ]]; then
+  UVICORN_ARGS+=(--reload)
+  RUN_MODE="development (auto-reload)"
 else
-  echo ">>> Non-interactive shell detected, using IS_PROD=${IS_PROD}"
+  RUN_MODE="local (no auto-reload)"
 fi
 
-echo ""
+echo
 echo "=========================================="
-echo "  SEO / GEO Article Writer starting..."
-echo "  URL:        http://127.0.0.1:${PORT}"
-echo "  Demo:       http://127.0.0.1:${PORT}/"
-echo "  Docs:       http://127.0.0.1:${PORT}/docs"
-echo "  Mode:       $( [ "${DEBUG_FLAG}" = "true" ] && echo "debug" || echo "normal" )"
-echo "  LLM mode:   $( [ -n "${OPENAI_API_KEY:-}" ] && [ "${LLM_MOCK_MODE:-true}" != "true" ] && echo "live" || echo "mock" )"
-if [[ "${IS_PROD}" =~ ^[Yy]$ ]]; then
-  echo "  Runtime:    background"
-  echo "  Stop:       kill \$(cat server.pid)"
-else
-  echo "  Runtime:    foreground"
-fi
+echo "  SEO / GEO Article Writer"
+echo "  Home: http://127.0.0.1:${PORT}/"
+echo "  API:  http://127.0.0.1:${PORT}/docs"
+echo "  Mode: ${RUN_MODE}"
+echo "  Stop: Ctrl+C"
 echo "=========================================="
-echo ""
+echo
 
-if [[ "${IS_PROD}" =~ ^[Yy]$ ]]; then
-  nohup python -m uvicorn app.main:app --host "${HOST}" --port "${PORT}" > nohup.out 2>&1 &
-  echo $! > server.pid
-  echo ">>> Server started in background, PID: $(cat server.pid)"
-else
-  if [ "${DEBUG_FLAG}" = "true" ]; then
-    exec python -m uvicorn app.main:app --reload --host "${HOST}" --port "${PORT}"
-  else
-    exec python -m uvicorn app.main:app --host "${HOST}" --port "${PORT}"
-  fi
-fi
+exec python -m uvicorn "${UVICORN_ARGS[@]}"

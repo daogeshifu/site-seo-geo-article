@@ -74,30 +74,30 @@ document.addEventListener("DOMContentLoaded", () => {
     accessToken = payload?.data?.access_token || "";
     const tier = payload?.data?.access_tier || "authorized";
     const expiresAt = payload?.data?.expires_at || "";
-    tokenPill.textContent = accessToken ? `${tier} token` : "No token";
+    tokenPill.textContent = accessToken ? `${tier} · 已连接` : "未连接";
     if (accessToken) {
-      tokenNote.textContent = `Bearer token is active until ${expiresAt}. The demo will attach it automatically to outline requests.`;
-      tokenMeta.textContent = `${tier.toUpperCase()} access · expires at ${expiresAt}`;
+      tokenNote.textContent = `授权有效期至 ${expiresAt}，生成时会自动验证。`;
+      tokenMeta.textContent = `${tier.toUpperCase()} 访问 · 到期时间 ${expiresAt}`;
       tokenValue.textContent = accessToken;
       tokenDisplay.classList.remove("hidden");
       return;
     }
     tokenNote.textContent =
-      "Token exchange happens once here, then the demo automatically sends `Authorization: Bearer ...` when you generate outlines.";
-    tokenMeta.textContent = "Standard access · valid for 1 day";
+      "请先连接访问密钥，生成时会自动完成验证。";
+    tokenMeta.textContent = "标准访问 · 有效期 1 天";
     tokenValue.textContent = "";
     tokenDisplay.classList.add("hidden");
   }
 
   function resetOutlineUi(message) {
     outlineBtn.disabled = false;
-    outlineBtn.innerHTML = "Start Outline Task";
-    outlineMeta.textContent = message || "No outline yet";
+    outlineBtn.innerHTML = "生成大纲";
+    outlineMeta.textContent = message || "等待生成";
   }
 
   function renderSuggestions(items) {
     if (!Array.isArray(items) || !items.length) {
-      suggestionsNode.innerHTML = '<div class="empty">Writing suggestions will appear here.</div>';
+      suggestionsNode.innerHTML = '<div class="empty">大纲生成后，这里会显示写作建议。</div>';
       return;
     }
     suggestionsNode.innerHTML = items
@@ -107,7 +107,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderLinks(items) {
     if (!Array.isArray(items) || !items.length) {
-      linksNode.innerHTML = '<div class="empty">Recommended internal links will appear here.</div>';
+      linksNode.innerHTML = '<div class="empty">大纲生成后，这里会显示推荐内链。</div>';
       return;
     }
     linksNode.innerHTML = items
@@ -170,6 +170,7 @@ document.addEventListener("DOMContentLoaded", () => {
       outlineMeta.textContent += ` · ${task.access_tier}`;
     }
     outlineOutput.textContent = outline.outline_markdown || "";
+    copyBtn.disabled = !outline.outline_markdown;
     renderSuggestions(outline.writing_suggestions || []);
     renderLinks(outline.recommended_internal_links || []);
     apiJson.textContent = JSON.stringify(task, null, 2);
@@ -189,7 +190,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       outlineOutput.textContent = payload.message || "Unable to generate outline.";
-      resetOutlineUi("Outline failed");
+      resetOutlineUi("大纲生成失败");
       return;
     }
 
@@ -200,7 +201,7 @@ document.addEventListener("DOMContentLoaded", () => {
   authForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     tokenBtn.disabled = true;
-    tokenBtn.innerHTML = "Requesting...";
+    tokenBtn.innerHTML = "连接中…";
     const formData = new FormData(authForm);
     const result = await requestJson("/api/token", {
       method: "POST",
@@ -210,22 +211,24 @@ document.addEventListener("DOMContentLoaded", () => {
     const data = result.data || {};
     apiJson.textContent = JSON.stringify(data, null, 2);
     renderTokenState(data.success ? data : null);
+    if (!data.success) tokenNote.textContent = data.message || "连接失败，请检查访问密钥后重试。";
     tokenBtn.disabled = false;
-    tokenBtn.innerHTML = "Get 1-Day Token";
+    tokenBtn.innerHTML = "连接密钥";
   });
 
   outlineForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     clearTimeout(pollTimer);
     if (!accessToken) {
-      outlineMeta.textContent = "Exchange a bearer token first";
+      outlineMeta.textContent = "请先连接访问密钥";
       return;
     }
 
     outlineBtn.disabled = true;
-    outlineBtn.innerHTML = "Starting...";
-    outlineMeta.textContent = "Submitting outline task...";
-    outlineOutput.textContent = "Submitting outline task...";
+    outlineBtn.innerHTML = "提交中…";
+    outlineMeta.textContent = "正在提交大纲任务…";
+    outlineOutput.textContent = "正在提交大纲任务…";
+    copyBtn.disabled = true;
     renderSuggestions([]);
     renderLinks([]);
     apiJson.textContent = JSON.stringify({ status: "submitting" }, null, 2);
@@ -262,7 +265,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!data.success) {
       outlineOutput.textContent = data.message || "Unable to generate outline.";
-      resetOutlineUi("Outline failed");
+      resetOutlineUi("大纲生成失败");
       return;
     }
 
@@ -274,25 +277,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
   copyBtn.addEventListener("click", async () => {
     const value = outlineOutput.textContent || "";
-    if (!value || value === "Generate an outline to preview the result here.") {
-      outlineMeta.textContent = "No outline to copy";
+    if (!value || value === "填写左侧主题并生成大纲，内容将在这里显示。") {
+      outlineMeta.textContent = "暂无可复制的大纲";
       return;
     }
     try {
       await navigator.clipboard.writeText(value);
-      outlineMeta.textContent = "Outline copied";
+      outlineMeta.textContent = "大纲已复制";
     } catch {
-      outlineMeta.textContent = "Copy failed";
+      outlineMeta.textContent = "复制失败，请手动选择大纲文本复制。";
     }
   });
 
   clearBtn.addEventListener("click", () => {
     clearTimeout(pollTimer);
-    outlineOutput.textContent = "Generate an outline to preview the result here.";
+    copyBtn.disabled = true;
+    outlineOutput.textContent = "填写左侧主题并生成大纲，内容将在这里显示。";
     renderSuggestions([]);
     renderLinks([]);
     apiJson.textContent = "{}";
-    resetOutlineUi("No outline yet");
+    resetOutlineUi("等待生成");
   });
 
   renderTokenState(null);

@@ -71,17 +71,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function resetTaskUi(message) {
     submitBtn.disabled = false;
-    submitBtn.innerHTML = "Start Task";
-    taskMeta.textContent = message || "No active task";
+    submitBtn.innerHTML = "生成文章";
+    taskMeta.textContent = message || "等待生成";
   }
 
   function renderSummary(progress) {
     const info = progress || { total: 0, completed: 0, cached: 0, failed: 0 };
     summary.innerHTML = `
-      <div class="summary-card"><strong>${info.total || 0}</strong><span>Total</span></div>
-      <div class="summary-card"><strong>${info.completed || 0}</strong><span>Completed</span></div>
-      <div class="summary-card"><strong>${info.cached || 0}</strong><span>Cached</span></div>
-      <div class="summary-card"><strong>${info.failed || 0}</strong><span>Failed</span></div>
+      <div class="summary-card"><strong>${info.total || 0}</strong><span>任务</span></div>
+      <div class="summary-card"><strong>${info.completed || 0}</strong><span>已完成</span></div>
+      <div class="summary-card"><strong>${info.cached || 0}</strong><span>缓存命中</span></div>
+      <div class="summary-card"><strong>${info.failed || 0}</strong><span>失败</span></div>
     `;
   }
 
@@ -96,10 +96,10 @@ document.addEventListener("DOMContentLoaded", () => {
   function formatProgress(task) {
     const progress = task.progress || {};
     if (task.status === "completed") {
-      return progress.cached ? "Completed · cache hit" : "Completed";
+      return progress.cached ? "已完成 · cache hit" : "已完成";
     }
     if (task.status === "failed") {
-      return "Failed";
+      return "失败";
     }
     return "In progress";
   }
@@ -177,12 +177,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderRecentTasks(tasks) {
     if (!accessToken) {
-      recentTasks.innerHTML = '<div class="empty">Exchange a bearer token to load the latest task records.</div>';
+      recentTasks.innerHTML = '<div class="empty">连接访问密钥后，即可查看最近任务。</div>';
       return;
     }
 
     if (!Array.isArray(tasks) || !tasks.length) {
-      recentTasks.innerHTML = '<div class="empty">No tasks have been created yet.</div>';
+      recentTasks.innerHTML = '<div class="empty">还没有任务，完成首次生成后会显示在这里。</div>';
       return;
     }
 
@@ -240,7 +240,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const taskId = Number(button.dataset.taskId || 0);
         if (taskId > 0) {
           fetchTask(taskId);
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          document.getElementById("result-panel").scrollIntoView({ behavior: "smooth", block: "start" });
         }
       });
     });
@@ -302,7 +302,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     clearTimeout(pollTimer);
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner" style="width:18px;height:18px;border-width:3px;margin:0"></span> Starting...';
+    submitBtn.innerHTML = '<span class="spinner" style="width:18px;height:18px;border-width:3px;margin:0"></span> 提交中…';
     taskMeta.textContent = `Retrying task ${taskId}...`;
     results.innerHTML = `
       <div class="loading-card loading-card-immersive">
@@ -317,9 +317,9 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="generation-subtitle">Resubmitting the failed task with force refresh enabled.</div>
           </div>
           <div class="generation-steps">
-            <div class="generation-step"><span class="generation-dot"></span><span>Intent and outline planning</span></div>
-            <div class="generation-step"><span class="generation-dot"></span><span>SEO / GEO article drafting</span></div>
-            <div class="generation-step"><span class="generation-dot"></span><span>HTML polishing and image packaging</span></div>
+            <div class="generation-step"><span class="generation-dot"></span><span>分析意图与规划结构</span></div>
+            <div class="generation-step"><span class="generation-dot"></span><span>撰写 SEO / GEO 正文</span></div>
+            <div class="generation-step"><span class="generation-dot"></span><span>排版优化与准备图片</span></div>
           </div>
           <div class="generation-bars">
             <span></span>
@@ -332,7 +332,7 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
     apiJson.textContent = JSON.stringify({ status: "retrying", original_task_id: taskId, payload: submitPayload }, null, 2);
     renderSummary();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.getElementById("result-panel").scrollIntoView({ behavior: "smooth", block: "start" });
 
     const submitResult = await requestJson("/api/tasks", {
       method: "POST",
@@ -436,10 +436,10 @@ document.addEventListener("DOMContentLoaded", () => {
     accessToken = payload?.data?.access_token || "";
     const tier = payload?.data?.access_tier || "authorized";
     const expiresAt = payload?.data?.expires_at || "";
-    tokenPill.textContent = accessToken ? `${tier} token` : "No token";
+    tokenPill.textContent = accessToken ? `${tier} · 已连接` : "未连接";
     if (accessToken) {
-      tokenNote.textContent = `Bearer token is active until ${expiresAt}. The demo will attach it automatically to task requests.`;
-      tokenMeta.textContent = `${tier.toUpperCase()} access · expires at ${expiresAt}`;
+      tokenNote.textContent = `授权有效期至 ${expiresAt}，生成时会自动验证。`;
+      tokenMeta.textContent = `${tier.toUpperCase()} 访问 · 到期时间 ${expiresAt}`;
       tokenValue.textContent = accessToken;
       tokenDisplay.classList.remove("hidden");
       refreshRecentTasks();
@@ -447,8 +447,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     tokenNote.textContent =
-      "Token exchange happens once here, then the demo automatically sends `Authorization: Bearer ...` when you create or fetch tasks.";
-    tokenMeta.textContent = "Standard access · valid for 1 day";
+      "请先连接访问密钥，生成时会自动完成验证。";
+    tokenMeta.textContent = "标准访问 · 有效期 1 天";
     tokenValue.textContent = "";
     tokenDisplay.classList.add("hidden");
     renderRecentTasks([]);
@@ -465,7 +465,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const article = task.article || {};
 
     if (!article.title) {
-      results.innerHTML = '<div class="empty">No article result is available for this task yet.</div>';
+      results.innerHTML = '<div class="empty">任务处理中，完成后会自动显示文章。</div>';
       return;
     }
 
@@ -512,21 +512,21 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
           </div>
           <div>
-            <button class="btn btn-ghost btn-small export-docx-btn" type="button" data-task-id="${task.task_id}">Export DOCX</button>
+            <button class="btn btn-ghost btn-small export-docx-btn" type="button" data-task-id="${task.task_id}">导出 Word</button>
           </div>
         </div>
         ${task.error_message ? `<p class="muted" style="color:#b91c1c">${escapeHtml(task.error_message)}</p>` : ""}
-        <div class="article-meta">
+        <details class="article-details"><summary>SEO 信息与页面详情</summary><div class="article-meta">
           <div><strong>Title:</strong> ${escapeHtml(article.title)}</div>
           <div><strong>URL:</strong> ${escapeHtml(previewArticleUrl(article))}</div>
           <div><strong>${task.mode_type === 2 ? "Outline Summary" : "Keyword"}:</strong> ${escapeHtml(summarizeTaskKeyword(task))}</div>
           <div><strong>Meta Title:</strong> ${escapeHtml(article.meta_title)}</div>
           <div><strong>Meta Description:</strong> ${escapeHtml(article.meta_description)}</div>
         </div>
-        <div class="result-tabs">
+        </details><div class="result-tabs">
           <div class="result-tab-buttons">
-            <button class="result-tab-button active" type="button" data-tab="preview">Preview</button>
-            <button class="result-tab-button" type="button" data-tab="html">View HTML</button>
+            <button class="result-tab-button active" type="button" data-tab="preview">正文预览</button>
+            <button class="result-tab-button" type="button" data-tab="html">查看 HTML</button>
           </div>
           <div class="result-tab-panel active" data-panel="preview">
             <div class="preview-surface">${previewHtml}</div>
@@ -584,7 +584,7 @@ document.addEventListener("DOMContentLoaded", () => {
     event.preventDefault();
     tokenBtn.disabled = true;
     tokenBtn.innerHTML =
-      '<span class="spinner" style="width:18px;height:18px;border-width:3px;margin:0"></span> Exchanging...';
+      '<span class="spinner" style="width:18px;height:18px;border-width:3px;margin:0"></span> 连接中…';
 
     const formData = new FormData(authForm);
     const payload = {
@@ -602,15 +602,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!data.success) {
       accessToken = "";
       renderTokenState(null);
-      tokenNote.textContent = data.message || "Token exchange failed.";
+      tokenNote.textContent = data.message || "连接失败，请检查访问密钥后重试。";
       tokenBtn.disabled = false;
-      tokenBtn.innerHTML = "Get 1-Day Token";
+      tokenBtn.innerHTML = "连接密钥";
       return;
     }
 
     renderTokenState(data);
     tokenBtn.disabled = false;
-    tokenBtn.innerHTML = "Get 1-Day Token";
+    tokenBtn.innerHTML = "连接密钥";
   });
 
   taskForm.addEventListener("submit", async (event) => {
@@ -618,15 +618,15 @@ document.addEventListener("DOMContentLoaded", () => {
     clearTimeout(pollTimer);
 
     if (!accessToken) {
-      taskMeta.textContent = "Exchange a bearer token first";
-      results.innerHTML = '<div class="empty">A valid token is required before the task can start.</div>';
+      taskMeta.textContent = "请先连接访问密钥";
+      results.innerHTML = '<div class="empty">请先连接访问密钥，然后重新生成。</div>';
       return;
     }
 
     submitBtn.disabled = true;
     submitBtn.innerHTML =
-      '<span class="spinner" style="width:18px;height:18px;border-width:3px;margin:0"></span> Starting...';
-    taskMeta.textContent = "Submitting task...";
+      '<span class="spinner" style="width:18px;height:18px;border-width:3px;margin:0"></span> 提交中…';
+    taskMeta.textContent = "正在提交任务…";
     results.innerHTML = `
       <div class="loading-card loading-card-immersive">
         <div class="generation-shell">
@@ -636,13 +636,13 @@ document.addEventListener("DOMContentLoaded", () => {
             <span></span>
           </div>
           <div class="generation-copy">
-            <strong>Generating content now</strong>
-            <div class="generation-subtitle">Analyzing the keyword or outline, building strategy, drafting HTML, and preparing requested visuals.</div>
+            <strong>正在创作内容</strong>
+            <div class="generation-subtitle">正在分析主题、组织文章结构并准备配图，请耐心等待。</div>
           </div>
           <div class="generation-steps">
-            <div class="generation-step"><span class="generation-dot"></span><span>Intent and outline planning</span></div>
-            <div class="generation-step"><span class="generation-dot"></span><span>SEO / GEO article drafting</span></div>
-            <div class="generation-step"><span class="generation-dot"></span><span>HTML polishing and image packaging</span></div>
+            <div class="generation-step"><span class="generation-dot"></span><span>分析意图与规划结构</span></div>
+            <div class="generation-step"><span class="generation-dot"></span><span>撰写 SEO / GEO 正文</span></div>
+            <div class="generation-step"><span class="generation-dot"></span><span>排版优化与准备图片</span></div>
           </div>
           <div class="generation-bars">
             <span></span>
@@ -691,7 +691,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!data.success) {
       taskMeta.textContent = data.message || `Task creation failed (${result.status || "network"})`;
-      results.innerHTML = '<div class="empty">The request could not be processed.</div>';
+      results.innerHTML = '<div class="empty">提交失败，请查看上方提示，调整后重新生成。</div>';
       apiJson.textContent = JSON.stringify(data, null, 2);
       resetTaskUi(taskMeta.textContent);
       return;
@@ -705,9 +705,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   clearBtn.addEventListener("click", () => {
     clearTimeout(pollTimer);
-    resetTaskUi("No active task");
+    resetTaskUi("等待生成");
     renderSummary();
-    results.innerHTML = '<div class="empty">Exchange a token and submit a task to preview generated SEO or GEO article output.</div>';
+    results.innerHTML = '<div class="empty">填写左侧主题，点击「生成文章」，内容将在这里显示。</div>';
     apiJson.textContent = "{}";
   });
 

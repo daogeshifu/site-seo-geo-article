@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,148 +7,83 @@
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='demo/favicon.svg') }}?v={{ static_version }}" />
     <link rel="stylesheet" href="{{ url_for('static', path='demo/style.css') }}?v={{ static_version }}" />
     <script src="{{ url_for('static', path='demo/demo.js') }}?v={{ static_version }}" defer></script>
+    <script src="{{ url_for('static', path='demo/workspace.js') }}?v={{ static_version }}" defer></script>
   </head>
-  <body>
+  <body class="writer-workspace">
+    <a class="skip-link" href="#workspace-form">跳到创作表单</a>
     <header class="topbar">
-      <div class="topbar-inner">
-        <div class="logo">SG</div>
-        <div class="brand">
-          <strong>SEO / GEO Article Writer</strong>
-          <span>FastAPI console for tokenized article generation</span>
-        </div>
-        <nav class="demo-nav">
-          <a class="pill {% if active_demo == 'article' %}pill-done{% endif %}" href="/">Article Demo</a>
-          <a class="pill {% if active_demo == 'outline' %}pill-done{% endif %}" href="/outline">Outline Demo</a>
-        </nav>
-        <div class="top-links">
-          <a class="pill" href="https://www.idtcpack.com/" target="_blank" rel="noreferrer">Live Preview</a>
-          <a class="pill" href="/docs" target="_blank" rel="noreferrer">OpenAPI Docs</a>
-        </div>
-      </div>
-    </header>
-
+<div class="topbar-inner">
+<div class="logo">SG</div>
+<div class="brand"><strong>SEO / GEO Studio</strong><span>内容创作工作台</span>
+</div>
+<nav class="demo-nav" aria-label="创作导航"><a class="pill {% if active_demo == 'article' %}pill-done{% endif %}" href="/">文章创作</a><a class="pill {% if active_demo == 'outline' %}pill-done{% endif %}" href="/outline">大纲规划</a>
+</nav>
+<div class="top-links"><a href="/docs" target="_blank" rel="noreferrer">API 文档 ↗</a>
+<button id="fullscreen-btn" class="btn btn-ghost btn-small" type="button">⛶ 全屏</button>
+</div>
+</div>
+</header>
     <main class="container">
-      <section class="hero">
-        <div class="hero-grid">
-          <div>
-            <div class="eyebrow">Open Source • Bearer Token • Async Tasks</div>
-            <h1>Create SEO or GEO article</h1>
-            <p>
-              The demo stays thin on purpose: it first requests a time-limited token, then uses the same backend task API
-              you would call from your own client or service.
-            </p>
-            <div class="hero-badges">
-              <span class="badge {{ llm_badge_class }}">{{ llm_label }}</span>
-              <span class="badge {{ image_badge_class }}">{{ image_label }}</span>
-              <span class="badge badge-neutral">1-day bearer token</span>
-              <span class="badge badge-neutral">POST /api/tasks</span>
-              <span class="badge badge-neutral">GET /api/tasks/&lt;task_id&gt;</span>
-              <span class="badge badge-neutral">Keyword-level cache</span>
-            </div>
-          </div>
-          <aside class="hero-note">
-            <h2>Console Notes</h2>
-            <ul>
-              <li>SEO mode emphasizes title, meta, outline, FAQ, and readability constraints.</li>
-              <li>GEO mode focuses on answer-first structure, citability, trust signals, and entity clarity.</li>
-              <li>{{ llm_tip }}</li>
-              <li>{{ image_tip }}</li>
-            </ul>
-          </aside>
-        </div>
-      </section>
-
-      <section class="section-stack">
-        <article class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <strong>1. Exchange Token</strong>
-              <span>Use a normal or VIP access key from `.env` to mint a bearer token that stays valid for one day.</span>
-            </div>
-            <span id="token-pill" class="pill">No token</span>
-          </div>
-          <div class="card-body">
-            <form id="auth-form" class="form-grid">
-              <label class="full">
-                Access Key
-                <input type="text" name="access_key" placeholder="Enter NORMAL_ACCESS_KEY or VIP_ACCESS_KEY" required />
-              </label>
-              <div id="token-note" class="token-note">
-                Token exchange happens once here, then the demo automatically sends `Authorization: Bearer ...` when you create or fetch tasks.
-              </div>
-              <div id="token-display" class="token-display hidden">
-                <div class="token-display-head">
-                  <div>
-                    <strong>Issued Access Token</strong>
-                    <span id="token-meta">Standard access · valid for 1 day</span>
-                  </div>
-                  <span id="token-status-badge" class="pill pill-done">Active</span>
-                </div>
-                <pre id="token-value" class="token-value"></pre>
-              </div>
-              <div class="actions">
-                <button class="btn btn-primary" type="submit" id="token-btn">Get 1-Day Token</button>
-              </div>
-            </form>
-          </div>
-        </article>
-
-        <article class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <strong>2. Create Task</strong>
-              <span>Submit a single keyword or outline task through the live API after a valid token has been exchanged.</span>
-            </div>
-            <span class="pill">Demo Client</span>
-          </div>
-          <div class="card-body">
-            <form id="task-form" class="form-grid">
-              <label>
-                Category
-                <select name="category" required>
+<section class="workspace-heading">
+<div>
+<div class="eyebrow">CONTENT WORKSPACE</div><h1>文章创作</h1><p>从一个主题开始，把灵感变成更易被搜索和引用的内容。</p>
+</div>
+<div class="service-status"><span class="badge {{ llm_badge_class }}">{{ llm_label }}</span><span class="workspace-step">01 设置内容 <i>→</i> 02 生成预览 <i>→</i> 03 导出使用</span>
+</div>
+</section>
+    <div class="workspace-grid">
+<div class="editor-column">
+    <details class="card auth-card" id="auth-section">
+<summary><span><strong>访问授权</strong>
+<small>点击连接访问密钥 · 有效期 1 天</small></span><span id="token-pill" class="pill">未连接</span>
+</summary>
+<div class="card-body">
+<form id="auth-form" class="form-grid">
+<label class="full">访问密钥<input type="password" name="access_key" required placeholder="输入管理员提供的访问密钥" autocomplete="off" />
+</label>
+<div id="token-note" class="token-note" role="status">请先连接访问密钥，生成时会自动完成验证。</div>
+<div id="token-display" class="token-display hidden"><strong>连接成功</strong><span id="token-meta"></span>
+<details>
+<summary>查看访问令牌</summary><pre id="token-value" class="token-value"></pre>
+</details>
+</div>
+<div class="actions">
+<button class="btn btn-primary" type="submit" id="token-btn">连接密钥</button>
+</div>
+</form>
+</div>
+</details>
+    <article class="card editor-card" id="workspace-form">
+<div class="card-header">
+<div class="card-title"><strong>创作设置</strong><span>先填写主题，其他选项可按需调整。</span>
+</div><span class="pill">文章</span>
+</div>
+<div class="card-body">
+<form id="task-form" class="form-grid">
+<label><span class="field-label">优化方向</span><select name="category" required>
                   <option value="seo">SEO</option>
                   <option value="geo">GEO</option>
                 </select>
-              </label>
-              <label>
-                Version
-                <select name="content_version" id="content-version-select" required>
-                  <option value="2.0">2.0 - Current</option>
-                  <option value="3.0">3.0 - Publishing Context</option>
+              <small class="field-hint">SEO 侧重搜索排名；GEO 侧重 AI 回答引用。</small>
+</label>
+<label><span class="field-label">输入方式</span><select name="mode_type">
+                  <option value="1">关键词生成</option>
+                  <option value="2">按大纲写作</option>
                 </select>
               </label>
-              <label id="publishing-context-field">
-                Publishing Context
-                <select name="publishing_context" id="publishing-context-select" disabled>
-                  <option value="official_website">Official Website</option>
-                  <option value="third_party_media">Third-party Media</option>
-                  <option value="conversion_page">Conversion Page</option>
-                </select>
-              </label>
-              <label>
-                Provider
-                <select name="provider" required>
-                  <option value="openai">OpenAI (ChatGPT)</option>
-                  <option value="anthropic">Anthropic (Claude)</option>
-                </select>
-              </label>
-              <label>
-                Language
-                <select name="language" id="language-select" required>
+<label class="full"><span class="field-label" id="keyword-label">主题关键词 <em>必填</em></span><textarea name="keyword" rows="4" required placeholder="Keyword mode:&#10;portable charger on plane&#10;&#10;Outline mode:&#10;# Portable Charger on Plane&#10;## Airline rules&#10;## Battery limits&#10;### Domestic flights&#10;### International flights"></textarea>
+              <small id="keyword-hint" class="field-hint">输入一个明确主题，例如：便携充电宝可以带上飞机吗？</small>
+</label>
+<label><span class="field-label">文章语言</span><select name="language" id="language-select" required>
                   <option value="English">English</option>
                   <option value="Chinese">中文</option>
                   <option value="French">Français</option>
                   <option value="German">Deutsch</option>
                   <option value="Dutch">Nederlands</option>
                 </select>
-              </label>
-              <label>
-                Word Limit
-                <input type="number" name="word_limit" value="1200" min="200" max="10000" step="100" />
-              </label>
-              <label>
-                Country
-                <select name="country" id="country-select" required>
+              <small class="field-hint">语言与目标市场自动匹配，可从任一项切换。</small>
+</label>
+<label><span class="field-label">目标市场</span><select name="country" id="country-select" required>
                   <option value="us">United States</option>
                   <option value="cn">China</option>
                   <option value="fr">France</option>
@@ -156,95 +91,125 @@
                   <option value="nl">Netherlands</option>
                 </select>
               </label>
-              <label>
-                Cover Image
-                <select name="include_cover">
-                  <option value="1">1</option>
-                  <option value="0">0</option>
+<label><span class="field-label">目标字数</span><input type="number" name="word_limit" value="1200" min="200" max="10000" step="100" />
+              <small class="field-hint">200–10,000 字；仅计算正文，不含图片。</small>
+</label><p class="form-section-caption full">高级选项 <span>已有默认设置，无需逐项填写</span></p>
+<details class="advanced-group full">
+<summary><span><strong>品牌与产品</strong>
+<small>业务背景、产品链接与品牌对比</small></span><span class="disclosure" aria-hidden="true">＋</span>
+</summary>
+<div class="form-grid advanced-body">
+<label class="full"><span class="field-label">品牌与产品资料（选填）</span><textarea name="info" rows="6" placeholder="Brand: VoltGo&#10;Product: 20000mAh portable charger&#10;Highlights: airline-safe, fast charging, digital display"></textarea>
+              <small class="field-hint">建议提供品牌名称、产品特点和目标读者。</small>
+</label>
+<label class="full"><span class="field-label">产品页面链接（选填）</span><input type="url" name="shopify_url" placeholder="https://de.ecoflow.com/products/stream-microinverter" />
+              <small class="field-hint">填写完整的 https:// 链接；不需要时可留空。</small>
+</label>
+<label class="toggle full">
+                <input type="checkbox" name="requires_shopify_link" value="true" />在文章前两段加入产品链接</label>
+<label class="toggle full">
+                <input type="checkbox" name="mentions_other_brands" value="true" />涉及其他品牌，按需加入对比声明</label>
+</div>
+</details>
+<details class="advanced-group full">
+<summary><span><strong>图片设置</strong>
+<small>默认生成 1 张封面 + 3 张正文配图</small></span><span class="disclosure" aria-hidden="true">＋</span>
+</summary>
+<div class="form-grid advanced-body">
+<label><span class="field-label">封面图片</span><select name="include_cover">
+                  <option value="1">生成封面</option>
+                  <option value="0">不生成封面</option>
                 </select>
               </label>
-              <label>
-                Content Images
-                <select name="content_image_count">
-                  <option value="3">3</option>
-                  <option value="2">2</option>
-                  <option value="1">1</option>
-                  <option value="0">0</option>
+<label><span class="field-label">正文配图</span><select name="content_image_count">
+                  <option value="3">3 张</option>
+                  <option value="2">2 张</option>
+                  <option value="1">1 张</option>
+                  <option value="0">0 张 · 不生成</option>
                 </select>
               </label>
-              <label class="full">
-                Keyword / Outline
-                <textarea name="keyword" rows="6" required placeholder="Keyword mode:&#10;portable charger on plane&#10;&#10;Outline mode:&#10;# Portable Charger on Plane&#10;## Airline rules&#10;## Battery limits&#10;### Domestic flights&#10;### International flights"></textarea>
-              </label>
-              <label>
-                Mode Type
-                <select name="mode_type">
-                  <option value="1">1 - Keyword</option>
-                  <option value="2">2 - Outline</option>
+</div>
+</details>
+<details class="advanced-group full">
+<summary><span><strong>写作与发布</strong>
+<small>模型、内容版本与缓存策略</small></span><span class="disclosure" aria-hidden="true">＋</span>
+</summary>
+<div class="form-grid advanced-body">
+<label><span class="field-label">写作模型</span><select name="provider" required>
+                  <option value="openai">OpenAI (ChatGPT)</option>
+                  <option value="anthropic">Anthropic (Claude)</option>
                 </select>
               </label>
-              <label class="full">
-                Brand / Product Info
-                <textarea name="info" rows="6" placeholder="Brand: VoltGo&#10;Product: 20000mAh portable charger&#10;Highlights: airline-safe, fast charging, digital display"></textarea>
+<label><span class="field-label">内容版本</span><select name="content_version" id="content-version-select" required>
+                  <option value="2.0">2.0 · 标准写作</option>
+                  <option value="3.0">3.0 · 场景写作</option>
+                </select>
+              <small class="field-hint">默认使用 2.0；选择 3.0 可进一步指定发布场景。</small>
+</label>
+<label id="publishing-context-field"><span class="field-label">发布场景</span><select name="publishing_context" id="publishing-context-select" disabled>
+                  <option value="official_website">品牌官网</option>
+                  <option value="third_party_media">第三方媒体</option>
+                  <option value="conversion_page">转化页面</option>
+                </select>
               </label>
-              <label class="full">
-                Shopify / Product URL
-                <input type="url" name="shopify_url" placeholder="https://de.ecoflow.com/products/stream-microinverter" />
-              </label>
-              <label class="full">
-                AI Q&A Content
-                <textarea name="ai_qa_content" rows="4" placeholder="Paste the answer returned by an AI assistant for this keyword. Optional, mainly useful for GEO mode."></textarea>
-              </label>
-              <label class="full">
-                AI Q&A Source Links
-                <textarea name="ai_qa_source" rows="3" placeholder="Paste source URLs adopted by the AI answer, one per line if there are multiple. Optional."></textarea>
-              </label>
-              <label class="toggle full">
-                <input type="checkbox" name="requires_shopify_link" value="true" />
-                Force an early product-page link in the first two paragraphs
-              </label>
-              <label class="toggle full">
-                <input type="checkbox" name="mentions_other_brands" value="true" />
-                This article mentions other brands and may need a comparison disclaimer
-              </label>
-              <label class="toggle full">
-                <input type="checkbox" name="force_refresh" value="true" />
-                Force refresh and ignore cache for this run
-              </label>
-              <div class="token-note">
-                `mode_type` defaults to `1` for keyword mode and uses `2` for outline mode. Version `2.0` keeps the current flow and prompts. Version `3.0` enables publishing context for official website, third-party media, or conversion page. In keyword mode, `keyword` is the target keyword. In outline mode, `keyword` stores the full outline and the writer will follow that structure strictly. `info` always stays as brand / product / customer context. The demo currently supports 5 language-country pairs through dropdowns only: English / United States, Chinese / China, French / France, German / Germany, and Dutch / Netherlands. `ai_qa_content` and `ai_qa_source` are optional GEO reference fields. `word_limit` defaults to `1200` and counts only text content (excluding images). `content_image_count` supports `0-3`. When it is `0`, no body images are generated. `include_cover` is only `0` or `1`.
-              </div>
-              <div class="actions">
-                <button class="btn btn-primary" type="submit" id="submit-btn">Start Task</button>
-                <button class="btn btn-ghost" type="button" id="clear-results">Clear Panel</button>
-              </div>
-            </form>
-          </div>
-        </article>
-
-        <section class="card">
+<label class="toggle full">
+                <input type="checkbox" name="force_refresh" value="true" />重新生成，不复用缓存</label>
+</div>
+</details>
+<details class="advanced-group full">
+<summary><span><strong>GEO 参考资料</strong>
+<small>补充 AI 回答与来源，提升内容针对性</small></span><span class="disclosure" aria-hidden="true">＋</span>
+</summary>
+<div class="form-grid advanced-body">
+<label class="full"><span class="field-label">AI 回答参考（选填）</span><textarea name="ai_qa_content" rows="4" placeholder="Paste the answer returned by an AI assistant for this keyword. Optional, mainly useful for GEO mode."></textarea>
+              <small class="field-hint">粘贴同一主题的 AI 回答，帮助补充信息；适合 GEO 内容。</small>
+</label>
+<label class="full"><span class="field-label">参考来源链接（选填）</span><textarea name="ai_qa_source" rows="3" placeholder="Paste source URLs adopted by the AI answer, one per line if there are multiple. Optional."></textarea>
+              <small class="field-hint">每行一个来源网址，用于提供写作参考。</small>
+</label>
+</div>
+</details>
+<div class="submit-dock full">
+<div id="form-feedback" role="status" class="form-feedback">准备好主题后，即可开始创作。</div>
+<div class="actions">
+<button class="btn btn-primary" type="submit" id="submit-btn">生成文章</button>
+<button class="btn btn-ghost" type="button" id="clear-results">清空结果</button>
+</div>
+<small id="settings-summary" class="field-hint">
+</small>
+</div>
+</form>
+</div>
+</article>
+</div>
+<div class="output-column">        <section class="card result-workspace" id="result-panel" tabindex="-1">
           <div class="card-header">
             <div class="card-title">
-              <strong>3. Task Result</strong>
-              <span>Status, article output, and raw API payload appear here.</span>
+              <strong>内容预览</strong>
+              <span>生成进度与内容会自动更新，可查看详情或导出。</span>
             </div>
-            <span id="task-meta" class="pill">No active task</span>
+            <span id="task-meta" class="pill">等待生成</span>
           </div>
           <div class="card-body">
             <div id="summary" class="summary-grid">
-              <div class="summary-card"><strong>0</strong><span>Total</span></div>
-              <div class="summary-card"><strong>0</strong><span>Completed</span></div>
-              <div class="summary-card"><strong>0</strong><span>Cached</span></div>
-              <div class="summary-card"><strong>0</strong><span>Failed</span></div>
+              <div class="summary-card"><strong>0</strong><span>任务</span>
+</div>
+              <div class="summary-card"><strong>0</strong><span>已完成</span>
+</div>
+              <div class="summary-card"><strong>0</strong><span>缓存命中</span>
+</div>
+              <div class="summary-card"><strong>0</strong><span>失败</span>
+</div>
             </div>
             <div class="shell-tabs">
               <div class="shell-tab-buttons">
-                <button class="shell-tab-button active" type="button" data-shell-tab="articles">Article Results</button>
-                <button class="shell-tab-button" type="button" data-shell-tab="api">API Response</button>
+                <button class="shell-tab-button active" type="button" data-shell-tab="articles">文章结果</button>
+                <button class="shell-tab-button" type="button" data-shell-tab="api">接口详情</button>
               </div>
               <div class="shell-tab-panel active" data-shell-panel="articles">
                 <div id="results" class="results">
-                  <div class="empty">Exchange a token and submit a task to preview generated SEO or GEO article output.</div>
+                  <div class="empty"><span class="empty-icon" aria-hidden="true">✧</span><strong>让一个主题，成为一篇好内容</strong><p>在左侧填写关键词，点击「生成文章」。<br>完成后可预览正文、查看 SEO 信息并导出文档。</p>
+</div>
                 </div>
               </div>
               <div class="shell-tab-panel" data-shell-panel="api">
@@ -255,147 +220,19 @@
             </div>
           </div>
         </section>
-
-        <section class="grid">
-          <div class="stack">
-            <article class="card">
-              <div class="card-header">
-                <div class="card-title">
-                  <strong>Writing Model</strong>
-                  <span>Two different content strategies are used depending on the selected category.</span>
-                </div>
-              </div>
-              <div class="card-body">
-                <div class="mini-grid">
-                  <div class="mini-card">
-                    <strong>SEO</strong>
-                    <p>Intent analysis, meta structure, H1/H2/H3 outline, long-tail coverage, conclusion, and FAQ.</p>
-                  </div>
-                  <div class="mini-card">
-                    <strong>GEO</strong>
-                    <p>Answer-first layout, proof blocks, references, trust cues, and entity alignment.</p>
-                  </div>
-                  <div class="mini-card">
-                  <strong>Cache</strong>
-                    <p>Each task stores one `keyword` field. In mode 1 it is the keyword; in mode 2 it is the outline. Cache reuse keys off category + keyword + mode type + normalized brand info.</p>
-                  </div>
-                </div>
-                <div class="inline-list">
-                  <span>1-day token exchange</span>
-                  <span>Bearer auth</span>
-                  <span>0-3 content images</span>
-                  <span>Optional cover</span>
-                  <span>Async task polling</span>
-                  <span>Reusable article cache</span>
-                </div>
-              </div>
-            </article>
-
-            <article class="card">
-              <div class="card-header">
-                <div class="card-title">
-                  <strong>Image Generation</strong>
-                  <span>Image output is still cached on disk, but task responses return inline preview data so no extra asset route is required.</span>
-                </div>
-                <span class="pill">{{ "Azure OpenAI" if image_mode == "azure" else "Local Mock" }}</span>
-              </div>
-              <div class="card-body">
-                <div class="mini-grid">
-                  <div class="mini-card">
-                    <strong>Cover</strong>
-                    <p>The cover is optional and controlled by `include_cover = 0 | 1`.</p>
-                  </div>
-                  <div class="mini-card">
-                    <strong>Body Images</strong>
-                    <p>`content_image_count` can be 0, 1, 2, or 3 depending on how visual the article should be.</p>
-                  </div>
-                  <div class="mini-card">
-                    <strong>Preview</strong>
-                    <p>The API response includes inline image sources so the demo can preview the result without `/generated/...` endpoints.</p>
-                  </div>
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <div class="stack">
-            <article class="card">
-              <div class="card-header">
-                <div class="card-title">
-                  <strong>Call Flow</strong>
-                  <span>The UI follows the same order your own client should use.</span>
-                </div>
-              </div>
-              <div class="card-body">
-                <div class="doc-block">
-                  <h3>1. Exchange token</h3>
-                  <pre class="code-block">curl -X POST http://127.0.0.1:8028/api/token \
-  -H "Content-Type: application/json" \
-  -d '{"access_key":"YOUR_ACCESS_KEY"}'</pre>
-                </div>
-                <div class="doc-block">
-                  <h3>2. Create task</h3>
-                  <pre class="code-block">curl -X POST http://127.0.0.1:8028/api/tasks \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "category": "seo",
-    "keyword": "portable charger on plane",
-    "info": "Brand: VoltGo. Product: 20000mAh portable charger.",
-    "provider": "openai",
-    "word_limit": 1200,
-    "include_cover": 1,
-    "content_image_count": 2
-  }'</pre>
-                </div>
-                <div class="doc-block">
-                  <h3>3. Get task result</h3>
-                  <pre class="code-block">curl http://127.0.0.1:8028/api/tasks/TASK_ID \
-  -H "Authorization: Bearer YOUR_TOKEN"</pre>
-                </div>
-              </div>
-            </article>
-
-            <article class="card">
-              <div class="card-header">
-                <div class="card-title">
-                  <strong>Structure</strong>
-                  <span>The page stays a thin demo client over the live FastAPI service.</span>
-                </div>
-              </div>
-              <div class="card-body">
-                <div class="doc-block">
-                  <h3>Frontend</h3>
-                  <p>`app/web/` renders this page and `app/web/static/demo/demo.js` calls the live token and task endpoints directly.</p>
-                </div>
-                <div class="doc-block">
-                  <h3>API</h3>
-                  <p>`app/api/` exposes the task creation and task result endpoints. The temporary token exchange route is used by the demo to mint a bearer token first.</p>
-                </div>
-                <div class="doc-block">
-                  <h3>Services</h3>
-                  <p>`app/services/` handles auth signing, prompts, writing, caching, image generation, and async task execution.</p>
-                </div>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <strong>4. Recent Tasks</strong>
-              <span>The latest 10 tasks are loaded in descending `task_id` order so you can jump back into finished runs.</span>
-            </div>
-            <span class="pill">Latest 10</span>
-          </div>
-          <div class="card-body">
-            <div id="recent-tasks" class="recent-tasks">
-              <div class="empty">Exchange a bearer token to load the latest task records.</div>
-            </div>
-          </div>
-        </section>
-      </section>
-    </main>
-  </body>
-</html>
+<section class="card history-card">
+<div class="card-header">
+<div class="card-title"><strong>最近任务</strong><span>保留最近 10 条记录，随时返回查看结果。</span>
+</div><span class="pill">最近 10 条</span>
+</div>
+<div class="card-body">
+<div id="recent-tasks" class="recent-tasks">
+<div class="empty">连接访问密钥后，即可查看最近任务。</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<div id="workspace-toast" class="workspace-toast" role="status" hidden>
+</div></body></html>

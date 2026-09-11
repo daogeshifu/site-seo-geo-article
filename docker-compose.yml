@@ -8,8 +8,6 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-site-seo-geo-article}
       MYSQL_USER: ${MYSQL_USER:-site-seo-geo-article}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-this-app-password}
-    ports:
-      - "${MYSQL_EXPOSE_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -28,12 +26,13 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: site-seo-geo-article-app
+    init: true
     restart: unless-stopped
     depends_on:
       mysql:
         condition: service_healthy
     env_file:
-      - .env.docker
+      - ${APP_ENV_FILE:-.env.docker}
     environment:
       FLASK_HOST: 0.0.0.0
       FLASK_PORT: 8028
@@ -42,6 +41,12 @@ services:
       - "${APP_EXPOSE_PORT:-8028}:8028"
     volumes:
       - ./data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://127.0.0.1:8028/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
 
 volumes:
   mysql_data:

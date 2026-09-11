@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,134 +7,78 @@
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='demo/favicon.svg') }}?v={{ static_version }}" />
     <link rel="stylesheet" href="{{ url_for('static', path='demo/style.css') }}?v={{ static_version }}" />
     <script src="{{ url_for('static', path='demo/outline.js') }}?v={{ static_version }}" defer></script>
+    <script src="{{ url_for('static', path='demo/workspace.js') }}?v={{ static_version }}" defer></script>
   </head>
-  <body>
+  <body class="writer-workspace">
+    <a class="skip-link" href="#workspace-form">跳到创作表单</a>
     <header class="topbar">
-      <div class="topbar-inner">
-        <div class="logo">SG</div>
-        <div class="brand">
-          <strong>SEO / GEO Outline Writer</strong>
-          <span>FastAPI console for instant outline planning</span>
-        </div>
-        <nav class="demo-nav">
-          <a class="pill {% if active_demo == 'article' %}pill-done{% endif %}" href="/">Article Demo</a>
-          <a class="pill {% if active_demo == 'outline' %}pill-done{% endif %}" href="/outline">Outline Demo</a>
-        </nav>
-        <div class="top-links">
-          <a class="pill" href="/docs" target="_blank" rel="noreferrer">OpenAPI Docs</a>
-        </div>
-      </div>
-    </header>
-
+<div class="topbar-inner">
+<div class="logo">SG</div>
+<div class="brand"><strong>SEO / GEO Studio</strong><span>内容创作工作台</span>
+</div>
+<nav class="demo-nav" aria-label="创作导航"><a class="pill {% if active_demo == 'article' %}pill-done{% endif %}" href="/">文章创作</a><a class="pill {% if active_demo == 'outline' %}pill-done{% endif %}" href="/outline">大纲规划</a>
+</nav>
+<div class="top-links"><a href="/docs" target="_blank" rel="noreferrer">API 文档 ↗</a>
+<button id="fullscreen-btn" class="btn btn-ghost btn-small" type="button">⛶ 全屏</button>
+</div>
+</div>
+</header>
     <main class="container">
-      <section class="hero">
-        <div class="hero-grid">
-          <div>
-            <div class="eyebrow">Outline Planning • Bearer Token • Async Task</div>
-            <h1>Create SEO or GEO outlines from a keyword and task context</h1>
-            <p>
-              This console queues an outline task, polls the result, and returns a ready-to-use article outline plus
-              writing suggestions and recommended internal links.
-            </p>
-            <div class="hero-badges">
-              <span class="badge {{ llm_badge_class }}">{{ llm_label }}</span>
-              <span class="badge badge-neutral">POST /api/outline</span>
-              <span class="badge badge-neutral">GET /api/outline/{outline_id}</span>
-              <span class="badge badge-neutral">Token-protected</span>
-              <span class="badge badge-neutral">Async polling</span>
-            </div>
-          </div>
-          <aside class="hero-note">
-            <h2>Console Notes</h2>
-            <ul>
-              <li>Use `info`, `country`, and optional Shopify context to ground the outline and link suggestions.</li>
-              <li>SEO mode emphasizes search intent and hierarchy. GEO mode emphasizes answer-first structure and extractability.</li>
-              <li>{{ llm_tip }}</li>
-            </ul>
-          </aside>
-        </div>
-      </section>
-
-      <section class="section-stack">
-        <article class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <strong>1. Exchange Token</strong>
-              <span>Use the same 1-day bearer token flow as the article demo.</span>
-            </div>
-            <span id="token-pill" class="pill">No token</span>
-          </div>
-          <div class="card-body">
-            <form id="auth-form" class="form-grid">
-              <label class="full">
-                Access Key
-                <input type="text" name="access_key" placeholder="Enter NORMAL_ACCESS_KEY or VIP_ACCESS_KEY" required />
-              </label>
-              <div id="token-note" class="token-note">
-                Token exchange happens once here, then the demo automatically sends `Authorization: Bearer ...` when you generate outlines.
-              </div>
-              <div id="token-display" class="token-display hidden">
-                <div class="token-display-head">
-                  <div>
-                    <strong>Issued Access Token</strong>
-                    <span id="token-meta">Standard access · valid for 1 day</span>
-                  </div>
-                  <span class="pill pill-done">Active</span>
-                </div>
-                <pre id="token-value" class="token-value"></pre>
-              </div>
-              <div class="actions">
-                <button class="btn btn-primary" type="submit" id="token-btn">Get 1-Day Token</button>
-              </div>
-            </form>
-          </div>
-        </article>
-
-        <article class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <strong>2. Create Outline Task</strong>
-              <span>Match the article task style with keyword, info, language, and task context.</span>
-            </div>
-            <span class="pill">Outline Planner</span>
-          </div>
-          <div class="card-body">
-            <form id="outline-form" class="form-grid">
-              <label>
-                Category
-                <select name="category" required>
+<section class="workspace-heading">
+<div>
+<div class="eyebrow">CONTENT WORKSPACE</div><h1>大纲规划</h1><p>从一个主题开始，把灵感变成更易被搜索和引用的内容。</p>
+</div>
+<div class="service-status"><span class="badge {{ llm_badge_class }}">{{ llm_label }}</span><span class="workspace-step">01 设置内容 <i>→</i> 02 生成预览 <i>→</i> 03 导出使用</span>
+</div>
+</section>
+    <div class="workspace-grid">
+<div class="editor-column">
+    <details class="card auth-card" id="auth-section">
+<summary><span><strong>访问授权</strong>
+<small>点击连接访问密钥 · 有效期 1 天</small></span><span id="token-pill" class="pill">未连接</span>
+</summary>
+<div class="card-body">
+<form id="auth-form" class="form-grid">
+<label class="full">访问密钥<input type="password" name="access_key" required placeholder="输入管理员提供的访问密钥" autocomplete="off" />
+</label>
+<div id="token-note" class="token-note" role="status">请先连接访问密钥，生成时会自动完成验证。</div>
+<div id="token-display" class="token-display hidden"><strong>连接成功</strong><span id="token-meta"></span>
+<details>
+<summary>查看访问令牌</summary><pre id="token-value" class="token-value"></pre>
+</details>
+</div>
+<div class="actions">
+<button class="btn btn-primary" type="submit" id="token-btn">连接密钥</button>
+</div>
+</form>
+</div>
+</details>
+    <article class="card editor-card" id="workspace-form">
+<div class="card-header">
+<div class="card-title"><strong>创作设置</strong><span>先填写主题，其他选项可按需调整。</span>
+</div><span class="pill">大纲</span>
+</div>
+<div class="card-body">
+<form id="outline-form" class="form-grid">
+<label><span class="field-label">优化方向</span><select name="category" required>
                   <option value="seo">SEO</option>
                   <option value="geo">GEO</option>
                 </select>
-              </label>
-              <label>
-                Version
-                <select name="content_version" id="content-version-select" required>
-                  <option value="2.0">2.0 - Current</option>
-                  <option value="3.0">3.0 - Publishing Context</option>
-                </select>
-              </label>
-              <label id="publishing-context-field">
-                Publishing Context
-                <select name="publishing_context" id="publishing-context-select" disabled>
-                  <option value="official_website">Official Website</option>
-                  <option value="third_party_media">Third-party Media</option>
-                  <option value="conversion_page">Conversion Page</option>
-                </select>
-              </label>
-              <label>
-                Language
-                <select name="language" id="language-select" required>
+              <small class="field-hint">SEO 侧重搜索排名；GEO 侧重 AI 回答引用。</small>
+</label>
+<label class="full"><span class="field-label" id="keyword-label">主题关键词 <em>必填</em></span><input type="text" name="keyword" required placeholder="Welke thuisbatterij heeft de beste app" />
+              <small id="keyword-hint" class="field-hint">输入一个明确主题，例如：便携充电宝可以带上飞机吗？</small>
+</label>
+<label><span class="field-label">文章语言</span><select name="language" id="language-select" required>
                   <option value="English">English</option>
                   <option value="Chinese">Chinese</option>
                   <option value="French">French</option>
                   <option value="German">German</option>
                   <option value="Dutch">Dutch</option>
                 </select>
-              </label>
-              <label>
-                Country
-                <select name="country" id="country-select" required>
+              <small class="field-hint">语言与目标市场自动匹配，可从任一项切换。</small>
+</label>
+<label><span class="field-label">目标市场</span><select name="country" id="country-select" required>
                   <option value="us">United States</option>
                   <option value="cn">China</option>
                   <option value="fr">France</option>
@@ -142,92 +86,115 @@
                   <option value="nl">Netherlands</option>
                 </select>
               </label>
-              <label>
-                Provider
-                <select name="provider" required>
-                  <option value="openai">OpenAI (ChatGPT)</option>
-                  <option value="anthropic">Anthropic (Claude)</option>
-                </select>
-              </label>
-              <label>
-                Word Limit
-                <input type="number" name="word_limit" min="200" max="10000" value="1200" />
-              </label>
-              <label class="full">
-                Keyword
-                <input type="text" name="keyword" required placeholder="Welke thuisbatterij heeft de beste app" />
-              </label>
-              <label class="full">
-                Info
-                <textarea
+<label><span class="field-label">目标字数</span><input type="number" name="word_limit" min="200" max="10000" value="1200" />
+              <small class="field-hint">200–10,000 字；仅计算正文，不含图片。</small>
+</label><p class="form-section-caption full">高级选项 <span>已有默认设置，无需逐项填写</span></p>
+<details class="advanced-group full">
+<summary><span><strong>品牌与产品</strong>
+<small>业务背景、产品链接与品牌对比</small></span><span class="disclosure" aria-hidden="true">＋</span>
+</summary>
+<div class="form-grid advanced-body">
+<label class="full"><span class="field-label">品牌与产品资料（选填）</span><textarea
                   name="info"
                   rows="4"
                   placeholder="Brand: Anker SOLIX&#10;Product focus: home battery app experience&#10;Audience: Dutch homeowners comparing monitoring UX and installation flexibility"
                 ></textarea>
-              </label>
-              <label>
-                Requires Shopify Link
-                <select name="requires_shopify_link">
-                  <option value="true">true</option>
-                  <option value="false">false</option>
+              <small class="field-hint">建议提供品牌名称、产品特点和目标读者。</small>
+</label>
+<label><span class="field-label">产品页面链接（选填）</span><input type="url" name="shopify_url" placeholder="https://www.ankersolix.com/nl/products/a17c5" />
+              <small class="field-hint">填写完整的 https:// 链接；不需要时可留空。</small>
+</label>
+<label><span class="field-label">在文章前两段加入产品链接</span><select name="requires_shopify_link">
+                  <option value="false">不需要</option><option value="true">需要产品链接</option>
                 </select>
               </label>
-              <label>
-                Shopify URL
-                <input type="url" name="shopify_url" placeholder="https://www.ankersolix.com/nl/products/a17c5" />
+</div>
+</details>
+<details class="advanced-group full">
+<summary><span><strong>写作与发布</strong>
+<small>模型、内容版本</small></span><span class="disclosure" aria-hidden="true">＋</span>
+</summary>
+<div class="form-grid advanced-body">
+<label><span class="field-label">写作模型</span><select name="provider" required>
+                  <option value="openai">OpenAI (ChatGPT)</option>
+                  <option value="anthropic">Anthropic (Claude)</option>
+                </select>
               </label>
-              <label class="full">
-                AI Q&A Content
-                <textarea name="ai_qa_content" rows="4" placeholder="Paste the answer returned by an AI assistant for this keyword. Optional, mainly useful for GEO mode."></textarea>
+<label><span class="field-label">内容版本</span><select name="content_version" id="content-version-select" required>
+                  <option value="2.0">2.0 · 标准写作</option>
+                  <option value="3.0">3.0 · 场景写作</option>
+                </select>
+              <small class="field-hint">默认使用 2.0；选择 3.0 可进一步指定发布场景。</small>
+</label>
+<label id="publishing-context-field"><span class="field-label">发布场景</span><select name="publishing_context" id="publishing-context-select" disabled>
+                  <option value="official_website">品牌官网</option>
+                  <option value="third_party_media">第三方媒体</option>
+                  <option value="conversion_page">转化页面</option>
+                </select>
               </label>
-              <label class="full">
-                AI Q&A Source Links
-                <textarea name="ai_qa_source" rows="3" placeholder="Paste source URLs adopted by the AI answer, one per line if there are multiple. Optional."></textarea>
-              </label>
-              <div class="token-note">
-                This page submits an async outline task, then polls by `outline_id`. Version `2.0` keeps the current detailed outline flow. Version `3.0` enables publishing context and uses a shorter H1/H2/FAQ/Internal Links outline style. `word_limit` also controls the recommended H2/H3/FAQ density, and `task_context` aligns with the article demo through `country`, `requires_shopify_link`, `shopify_url`, `ai_qa_content`, and `ai_qa_source`.
-              </div>
-              <div class="actions">
-                <button class="btn btn-primary" type="submit" id="outline-btn">Start Outline Task</button>
-                <button class="btn btn-ghost" type="button" id="copy-outline-btn">Copy Outline</button>
-                <button class="btn btn-ghost" type="button" id="clear-outline-btn">Clear Panel</button>
-              </div>
-            </form>
-          </div>
-        </article>
-
-        <section class="card">
+</div>
+</details>
+<details class="advanced-group full">
+<summary><span><strong>GEO 参考资料</strong>
+<small>补充 AI 回答与来源，提升内容针对性</small></span><span class="disclosure" aria-hidden="true">＋</span>
+</summary>
+<div class="form-grid advanced-body">
+<label class="full"><span class="field-label">AI 回答参考（选填）</span><textarea name="ai_qa_content" rows="4" placeholder="Paste the answer returned by an AI assistant for this keyword. Optional, mainly useful for GEO mode."></textarea>
+              <small class="field-hint">粘贴同一主题的 AI 回答，帮助补充信息；适合 GEO 内容。</small>
+</label>
+<label class="full"><span class="field-label">参考来源链接（选填）</span><textarea name="ai_qa_source" rows="3" placeholder="Paste source URLs adopted by the AI answer, one per line if there are multiple. Optional."></textarea>
+              <small class="field-hint">每行一个来源网址，用于提供写作参考。</small>
+</label>
+</div>
+</details>
+<div class="submit-dock full">
+<div id="form-feedback" role="status" class="form-feedback">准备好主题后，即可开始创作。</div>
+<div class="actions">
+<button class="btn btn-primary" type="submit" id="outline-btn">生成大纲</button>
+</div>
+<small id="settings-summary" class="field-hint">
+</small>
+</div>
+</form>
+</div>
+</article>
+</div>
+<div class="output-column">        <section class="card result-workspace" id="result-panel" tabindex="-1">
           <div class="card-header">
             <div class="card-title">
-              <strong>3. Outline Result</strong>
-              <span>The demo polls until the outline task completes, then renders the final planning output.</span>
+              <strong>大纲预览</strong>
+              <span>生成后可查看大纲、写作建议和推荐内链。</span>
             </div>
-            <span id="outline-meta" class="pill">No outline yet</span>
+            <span id="outline-meta" class="pill">等待生成</span>
           </div>
           <div class="card-body">
-            <div class="shell-tabs">
+            <div class="result-tools">
+<button class="btn btn-ghost btn-small" type="button" id="copy-outline-btn" disabled>复制大纲</button>
+<button class="btn btn-ghost btn-small" type="button" id="clear-outline-btn">清空结果</button>
+</div>
+<div class="shell-tabs">
               <div class="shell-tab-buttons">
-                <button class="shell-tab-button active" type="button" data-shell-tab="outline">Outline</button>
-                <button class="shell-tab-button" type="button" data-shell-tab="advice">Writing Notes</button>
-                <button class="shell-tab-button" type="button" data-shell-tab="api">API Response</button>
+                <button class="shell-tab-button active" type="button" data-shell-tab="outline">大纲</button>
+                <button class="shell-tab-button" type="button" data-shell-tab="advice">写作建议</button>
+                <button class="shell-tab-button" type="button" data-shell-tab="api">接口详情</button>
               </div>
               <div class="shell-tab-panel active" data-shell-panel="outline">
                 <div class="result-card">
-                  <h3>Outline Markdown</h3>
-                  <pre id="outline-output" class="code-block">Generate an outline to preview the result here.</pre>
+                  <h3>大纲内容</h3>
+                  <pre id="outline-output" class="code-block">填写左侧主题并生成大纲，内容将在这里显示。</pre>
                 </div>
               </div>
               <div class="shell-tab-panel" data-shell-panel="advice">
                 <div class="result-card">
-                  <h3>Writing Suggestions</h3>
+                  <h3>写作建议</h3>
                   <div id="outline-suggestions" class="outline-list">
-                    <div class="empty">Writing suggestions will appear here.</div>
+                    <div class="empty">大纲生成后，这里会显示写作建议。</div>
                   </div>
                 </div>
                 <div class="result-card" style="margin-top: 14px;">
-                  <h3>Recommended Internal Links</h3>
+                  <h3>推荐内链</h3>
                   <div id="outline-links" class="outline-list">
-                    <div class="empty">Recommended internal links will appear here.</div>
+                    <div class="empty">大纲生成后，这里会显示推荐内链。</div>
                   </div>
                 </div>
               </div>
@@ -239,7 +206,8 @@
             </div>
           </div>
         </section>
-      </section>
-    </main>
-  </body>
-</html>
+</div>
+</div>
+</main>
+<div id="workspace-toast" class="workspace-toast" role="status" hidden>
+</div></body></html>

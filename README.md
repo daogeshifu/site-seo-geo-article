@@ -131,7 +131,8 @@ GEO 模式参考了 [site-geo](https://github.com/daogeshifu/site-geo) 的 AI-re
 ├── Dockerfile                  # Docker image build file
 ├── docker-compose.yml          # Docker Compose deployment
 ├── .env.docker.example         # Docker environment example
-├── start.sh                    # 启动脚本
+├── start.sh                    # 本地开发启动脚本
+├── deploy.sh                   # 线上 Docker 部署脚本
 └── tests
     ├── test_api.py
     └── test_cache_service.py
@@ -141,85 +142,99 @@ GEO 模式参考了 [site-geo](https://github.com/daogeshifu/site-geo) 的 AI-re
 
 ## Quick Start
 
-### 1. Clone
+### 获取代码
 
 ```bash
 git clone <your-repo-url>
 cd site-seo-geo-article
 ```
 
-### 2. Create virtualenv
+### 本地开发：`start.sh`
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-### 3. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configure env
+准备本地配置：
 
 ```bash
 cp .env.example .env
 ```
 
-### 5. Run
+启动服务：
 
 ```bash
 ./start.sh
 ```
 
-默认会：
+`start.sh` 会自动：
 
-- 自动创建并激活 `.venv`
-- 自动安装依赖
-- 自动加载 `.env`
-- 检查目标端口占用
-- 若端口冲突则自动切到下一个可用端口
+- 检查 Python 3
+- 首次运行时创建 `.venv`
+- 仅在 `requirements.txt` 变化后重新安装依赖
+- 加载本地 `.env`
+- 以前台模式启动 Uvicorn，按 `Ctrl+C` 即可停止
+- 根据 `FLASK_DEBUG` 决定是否启用代码热重载
 
-后台模式：
-
-```bash
-IS_PROD=Y ./start.sh
-```
-
-Open:
+默认访问地址：
 
 ```text
 http://127.0.0.1:8028
 ```
 
-### 6. Docker Deploy
+如果端口已被占用，请在 `.env` 中修改 `FLASK_PORT` 后重新启动。默认 `LLM_MOCK_MODE=true`，不配置模型密钥也可以运行演示流程。
+
+本地示例默认使用内存保存任务状态；如需连接 MySQL，请在 `.env` 中同时配置 `MYSQL_HOST`、`MYSQL_USER`、`MYSQL_PASSWORD` 和 `MYSQL_DATABASE`。也可以通过 `ENV_FILE=/path/to/local.env ./start.sh` 使用另一份配置。
+
+### 线上部署：`deploy.sh`
+
+服务器需要预先安装 Docker Engine 和 Docker Compose v2。首次部署先准备生产配置：
 
 ```bash
 cp .env.docker.example .env.docker
-docker compose --env-file .env.docker up -d --build
+chmod 600 .env.docker
 ```
 
-默认会：
+至少替换以下示例值：
 
-- 启动 `app` 和 `mysql` 两个容器
-- 自动把本地 `./data` 挂载到容器内 `/app/data`
-- 自动等待 MySQL 健康后再启动 FastAPI
-- 自动把任务和结果持久化到 Compose 内置 MySQL
+- `MYSQL_ROOT_PASSWORD`
+- `MYSQL_PASSWORD`
+- `TOKEN_SIGNING_SECRET`
+- `NORMAL_ACCESS_KEY`
+- `VIP_ACCESS_KEY`
 
-Open:
+如果使用真实模型，还需要填写 Azure OpenAI 或 OpenAI-compatible 的相关配置。然后执行：
+
+```bash
+./deploy.sh
+```
+
+脚本会校验配置、构建 Docker 镜像、启动 `app` 与 `mysql`，并等待两个容器健康后返回。默认访问地址：
 
 ```text
 http://127.0.0.1:8028
 ```
 
-常用命令：
+常用运维命令：
 
 ```bash
-docker compose --env-file .env.docker logs -f app
-docker compose --env-file .env.docker down
-docker compose --env-file .env.docker down -v
+./deploy.sh status
+./deploy.sh logs
+./deploy.sh restart
+./deploy.sh stop
 ```
+
+说明：
+
+- `./deploy.sh` 可重复执行，用于首次部署或拉取代码后的重新构建
+- `./deploy.sh stop` 不会删除 MySQL volume 或本地 `data/`
+- MySQL 仅在 Docker 内部网络中访问，不默认暴露到公网
+- 如需使用其他配置文件，可执行 `ENV_FILE=/path/to/prod.env ./deploy.sh`
+
+线上反向代理（Nginx、Caddy 或负载均衡器）应转发到 `APP_EXPOSE_PORT`，并负责 HTTPS。
+
+### 启动方式对照
+
+| 场景 | 命令 | 运行方式 | 数据存储 |
+|---|---|---|---|
+| 本地开发 | `./start.sh` | `.venv` + Uvicorn 前台运行 | 内存任务状态 + 本地缓存；可选外部 MySQL |
+| 线上环境 | `./deploy.sh` | Docker Compose 后台运行 | `./data` + Docker MySQL volume |
 
 ---
 
@@ -227,9 +242,9 @@ docker compose --env-file .env.docker down -v
 
 | Name | Default | Description |
 |---|---|---|
-| `FLASK_HOST` | `0.0.0.0` | Flask host |
-| `FLASK_PORT` | `8028` | Flask port |
-| `FLASK_DEBUG` | `true` | Debug mode |
+| `FLASK_HOST` | `0.0.0.0` | Uvicorn bind host（沿用旧变量名） |
+| `FLASK_PORT` | `8028` | Uvicorn bind port（沿用旧变量名） |
+| `FLASK_DEBUG` | `true` | 本地 `start.sh` 是否启用自动重载 |
 | `APP_DATA_DIR` | `./data` | Data directory |
 | `MAX_WORKERS` | `2` | Async worker count |
 | `LLM_MOCK_MODE` | `true` | Use local mock output instead of real LLM |
@@ -280,44 +295,8 @@ docker compose --env-file .env.docker down -v
 | `MYSQL_RETRY_DELAY_SECONDS` | `0.6` | Delay between MySQL retries |
 | `MYSQL_POOL_SIZE` | `8` | MySQL connection pool size |
 | `MYSQL_FALLBACK_TO_MEMORY` | `false` | Fall back to in-memory task storage when MySQL init fails |
-| `IS_PROD` | `N` | Start in background when set to `Y` |
-| `AUTO_KILL_PORT` | `N` | Kill the requested port instead of auto-switching |
 
 If you keep `LLM_MOCK_MODE=true`, the whole workflow still works for demo and development.
-
-## Deployment
-
-### Local Script
-
-适合本机开发、调试和快速预览：
-
-```bash
-./start.sh
-```
-
-### Docker Compose
-
-适合标准化部署、团队协作和服务器环境：
-
-```bash
-cp .env.docker.example .env.docker
-docker compose --env-file .env.docker up -d --build
-```
-
-说明：
-
-- `app` 容器运行 FastAPI + Uvicorn
-- `mysql` 容器提供任务元数据和文章结果存储
-- 本地 `data/` 会映射到容器里的 `/app/data`
-- 如果你已有外部 MySQL，可以在 `.env.docker` 里改 `MYSQL_HOST`，并从 `docker-compose.yml` 中移除 `mysql` 服务
-
-镜像与编排文件：
-
-- [Dockerfile](/Users/berry-zhang/workspace/site-seo-geo-article/Dockerfile)
-- [docker-compose.yml](/Users/berry-zhang/workspace/site-seo-geo-article/docker-compose.yml)
-- [.env.docker.example](/Users/berry-zhang/workspace/site-seo-geo-article/.env.docker.example)
-
----
 
 ## API
 
@@ -473,12 +452,12 @@ MySQL 初始化 SQL 文件位于 [database/mysql_schema.sql](/Users/berry-zhang/
 ## Roadmap
 
 - [ ] 支持 Markdown / JSON / HTML 多输出格式
-- [ ] 支持数据库存储任务和缓存
+- [x] 支持数据库存储任务和缓存
 - [ ] 支持 Redis / Celery / RQ 异步队列
 - [ ] 支持文章导出到 CMS
 - [ ] 支持多语言模板
 - [ ] 支持文章质量评分和二次改写
-- [ ] 支持 Docker 部署
+- [x] 支持 Docker 部署
 
 ---
 
