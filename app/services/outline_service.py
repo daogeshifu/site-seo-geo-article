@@ -47,7 +47,7 @@ class OutlineService:
         if not normalized_keyword:
             raise ValueError("keyword is required")
 
-        if self.llm_client.enabled(provider):
+        if self.llm_client.enabled(provider, access_tier):
             prompt = self._build_prompt(
                 category=normalized_category,
                 keyword=normalized_keyword,

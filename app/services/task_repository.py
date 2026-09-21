@@ -644,7 +644,7 @@ class MySQLTaskRepository:
                         f"""
                         ALTER TABLE {TASK_TABLE}
                         ADD COLUMN provider VARCHAR(128) NOT NULL DEFAULT 'openai'
-                        COMMENT 'Resolved execution target, for example azure:gpt-5.4-pro'
+                        COMMENT 'Resolved execution target, for example azure:gpt-6-astra'
                         AFTER language
                         """
                     )
@@ -663,7 +663,7 @@ class MySQLTaskRepository:
                             f"""
                             ALTER TABLE {TASK_TABLE}
                             MODIFY COLUMN provider VARCHAR(128) NOT NULL DEFAULT 'openai'
-                            COMMENT 'Resolved execution target, for example azure:gpt-5.4-pro'
+                            COMMENT 'Resolved execution target, for example azure:gpt-6-astra'
                             """
                         )
 

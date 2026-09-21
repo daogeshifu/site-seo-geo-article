@@ -251,9 +251,10 @@ http://127.0.0.1:8028
 | `AZURE_OPENAI_API_KEY` | empty | Azure OpenAI API key for text generation |
 | `AZURE_OPENAI_RESPONSES_URL` | empty | Azure Responses API base URL, for example `https://YOUR-RESOURCE.openai.azure.com/openai/responses`; legacy URLs with `?api-version=` still work |
 | `AZURE_OPENAI_STANDARD_MODEL` | `gpt-5.4-mini` | Azure deployment name used for `NORMAL_ACCESS_KEY` requests |
-| `AZURE_OPENAI_VIP_MODEL` | `gpt-5.4-pro` | Azure deployment name used for `VIP_ACCESS_KEY` requests |
+| `AZURE_OPENAI_VIP_API_KEY` | empty | API key/token for VIP article generation; keep this value in `.env` or `.env.docker` only |
+| `AZURE_OPENAI_VIP_BASE_URL` | `https://suzhou-gpt6.openai.azure.com/openai/v1` | OpenAI-compatible Azure v1 base URL used for `VIP_ACCESS_KEY` requests |
+| `AZURE_OPENAI_VIP_MODEL` | `gpt-6-astra` | Azure deployment name used for `VIP_ACCESS_KEY` requests |
 | `AZURE_OPENAI_STANDARD_API_VERSION` | empty | Optional Azure Responses API version for `NORMAL_ACCESS_KEY`; falls back to the version embedded in `AZURE_OPENAI_RESPONSES_URL` |
-| `AZURE_OPENAI_VIP_API_VERSION` | empty | Optional Azure Responses API version for `VIP_ACCESS_KEY`; falls back to the version embedded in `AZURE_OPENAI_RESPONSES_URL` |
 | `OPENAI_API_KEY` | empty | Optional OpenAI-compatible API key used only when Azure Responses is not configured |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Optional fallback API base URL |
 | `OPENAI_MODEL` | `gpt-4.1-mini` | Optional fallback model name |

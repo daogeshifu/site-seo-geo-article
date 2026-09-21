@@ -25,9 +25,8 @@ def test_llm_client_uses_azure_responses_and_standard_model(monkeypatch: pytest.
         azure_openai_api_key="azure-key",
         azure_openai_responses_url="https://suzhou-gpt5.cognitiveservices.azure.com/openai/responses",
         azure_openai_standard_model="gpt-5.4-mini",
-        azure_openai_vip_model="gpt-5.4-pro",
+        azure_openai_vip_model="gpt-6-astra",
         azure_openai_standard_api_version="2025-04-01-preview",
-        azure_openai_vip_api_version="2025-05-01-preview",
     )
     client = LLMClient(settings)
     captured: dict[str, Any] = {}
@@ -56,15 +55,17 @@ def test_llm_client_uses_vip_model_for_vip_tier(monkeypatch: pytest.MonkeyPatch)
         azure_openai_api_key="azure-key",
         azure_openai_responses_url="https://suzhou-gpt5.cognitiveservices.azure.com/openai/responses?api-version=2025-04-01-preview",
         azure_openai_standard_model="gpt-5.4-mini",
-        azure_openai_vip_model="gpt-5.4-pro",
+        azure_openai_vip_api_key="gpt6-key",
+        azure_openai_vip_base_url="https://suzhou-gpt6.openai.azure.com/openai/v1",
+        azure_openai_vip_model="gpt-6-astra",
         azure_openai_standard_api_version="2025-04-01-preview",
-        azure_openai_vip_api_version="2025-05-01-preview",
     )
     client = LLMClient(settings)
     captured: dict[str, Any] = {}
 
     def fake_post(url: str, *, headers: dict[str, Any], json: dict[str, Any], timeout: int) -> _DummyResponse:
         captured["url"] = url
+        captured["headers"] = headers
         captured["json"] = json
         return _DummyResponse(
             {
@@ -82,8 +83,9 @@ def test_llm_client_uses_vip_model_for_vip_tier(monkeypatch: pytest.MonkeyPatch)
     text = client.complete("return json", expect_json=True, access_tier="vip")
 
     assert text == "{\"ok\": true}"
-    assert captured["url"] == "https://suzhou-gpt5.cognitiveservices.azure.com/openai/responses?api-version=2025-05-01-preview"
-    assert captured["json"]["model"] == "gpt-5.4-pro"
+    assert captured["url"] == "https://suzhou-gpt6.openai.azure.com/openai/v1/responses"
+    assert captured["headers"]["api-key"] == "gpt6-key"
+    assert captured["json"]["model"] == "gpt-6-astra"
 
 
 def test_llm_client_resolves_execution_provider_by_backend_and_tier() -> None:
@@ -92,7 +94,9 @@ def test_llm_client_resolves_execution_provider_by_backend_and_tier() -> None:
         azure_openai_api_key="azure-key",
         azure_openai_responses_url="https://suzhou-gpt5.cognitiveservices.azure.com/openai/responses",
         azure_openai_standard_model="gpt-5.4-mini",
-        azure_openai_vip_model="gpt-5.4-pro",
+        azure_openai_vip_api_key="gpt6-key",
+        azure_openai_vip_base_url="https://suzhou-gpt6.openai.azure.com/openai/v1",
+        azure_openai_vip_model="gpt-6-astra",
         openrouter_api_key="router-key",
         openrouter_standard_model="anthropic/claude-haiku-4.5",
         openrouter_vip_model="anthropic/claude-opus-4-6",
@@ -100,5 +104,5 @@ def test_llm_client_resolves_execution_provider_by_backend_and_tier() -> None:
     client = LLMClient(settings)
 
     assert client.resolve_execution_provider("openai", "standard") == "azure:gpt-5.4-mini"
-    assert client.resolve_execution_provider("openai", "vip") == "azure:gpt-5.4-pro"
+    assert client.resolve_execution_provider("openai", "vip") == "azure:gpt-6-astra"
     assert client.resolve_execution_provider("anthropic", "vip") == "openrouter:anthropic/claude-opus-4-6"

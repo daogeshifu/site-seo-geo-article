@@ -12,20 +12,20 @@ class LLMClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def enabled(self, provider: str = "openai") -> bool:
+    def enabled(self, provider: str = "openai", access_tier: str | None = None) -> bool:
         provider_kind = self.provider_kind(provider)
         if self.settings.llm_mock_mode:
             return False
         if provider_kind == "anthropic":
             return self._openrouter_enabled()
         if provider_kind == "azure":
-            return self._azure_enabled()
+            return self._azure_enabled(access_tier)
         if provider_kind == "openai":
-            return self._openai_enabled() or self._azure_enabled()
-        return self._azure_enabled() or self._openai_enabled()
+            return self._openai_enabled() or self._azure_enabled(access_tier)
+        return self._azure_enabled(access_tier) or self._openai_enabled()
 
     def complete(self, prompt: str, *, expect_json: bool = False, access_tier: str = "standard", provider: str = "openai") -> str:
-        if not self.enabled(provider):
+        if not self.enabled(provider, access_tier):
             raise RuntimeError("LLM client is disabled. Configure the corresponding API key or use mock mode.")
 
         provider_kind = self.provider_kind(provider)
@@ -35,9 +35,9 @@ class LLMClient:
 
         if provider_kind == "azure":
             return self._complete_with_azure_responses(prompt, expect_json=expect_json, access_tier=access_tier)
-        if provider_kind == "openai" and self._openai_enabled() and not self._azure_enabled():
+        if provider_kind == "openai" and self._openai_enabled() and not self._azure_enabled(access_tier):
             return self._complete_with_chat_completions(prompt, expect_json=expect_json)
-        if self._azure_enabled():
+        if self._azure_enabled(access_tier):
             return self._complete_with_azure_responses(prompt, expect_json=expect_json, access_tier=access_tier)
         return self._complete_with_chat_completions(prompt, expect_json=expect_json)
 
@@ -48,7 +48,7 @@ class LLMClient:
         if provider_kind == "azure":
             return f"azure:{self._model_for_tier(access_tier)}"
         if provider_kind == "openai":
-            if self._azure_enabled():
+            if self._azure_enabled(access_tier):
                 return f"azure:{self._model_for_tier(access_tier)}"
             return f"openai:{self.settings.openai_model}"
         return provider.strip().lower() or "openai"
@@ -66,8 +66,14 @@ class LLMClient:
             return normalized
         return "openai"
 
-    def _azure_enabled(self) -> bool:
-        return bool(self.settings.azure_openai_api_key and self.settings.azure_openai_responses_url)
+    def _azure_enabled(self, access_tier: str | None = None) -> bool:
+        if (access_tier or "").strip().lower() == "vip":
+            return bool(self.settings.azure_openai_vip_api_key and self.settings.azure_openai_vip_base_url)
+        standard_enabled = bool(self.settings.azure_openai_api_key and self.settings.azure_openai_responses_url)
+        if access_tier is None:
+            vip_enabled = bool(self.settings.azure_openai_vip_api_key and self.settings.azure_openai_vip_base_url)
+            return standard_enabled or vip_enabled
+        return standard_enabled
 
     def _openai_enabled(self) -> bool:
         return bool(self.settings.openai_api_key)
@@ -80,16 +86,11 @@ class LLMClient:
             return self.settings.azure_openai_vip_model or self.settings.azure_openai_standard_model
         return self.settings.azure_openai_standard_model
 
-    def _azure_api_version_for_tier(self, access_tier: str) -> str:
-        if (access_tier or "").strip().lower() == "vip":
-            return self.settings.azure_openai_vip_api_version or self.settings.azure_openai_standard_api_version
-        return self.settings.azure_openai_standard_api_version or self.settings.azure_openai_vip_api_version
-
-    def _azure_responses_url_for_tier(self, access_tier: str) -> str:
+    def _standard_azure_responses_url(self) -> str:
         raw_url = self.settings.azure_openai_responses_url.strip()
         if not raw_url:
             return raw_url
-        api_version = self._azure_api_version_for_tier(access_tier)
+        api_version = self.settings.azure_openai_standard_api_version
         if not api_version:
             return raw_url
 
@@ -104,11 +105,19 @@ class LLMClient:
         return self.settings.openrouter_standard_model
 
     def _complete_with_azure_responses(self, prompt: str, *, expect_json: bool, access_tier: str) -> str:
+        is_vip = (access_tier or "").strip().lower() == "vip"
+        if is_vip:
+            url = f"{self.settings.azure_openai_vip_base_url}/responses"
+            auth_headers = {"api-key": self.settings.azure_openai_vip_api_key}
+        else:
+            url = self._standard_azure_responses_url()
+            auth_headers = {"api-key": self.settings.azure_openai_api_key}
+
         response = requests.post(
-            self._azure_responses_url_for_tier(access_tier),
+            url,
             headers={
                 "Content-Type": "application/json",
-                "api-key": self.settings.azure_openai_api_key,
+                **auth_headers,
             },
             json={
                 "model": self._model_for_tier(access_tier),

@@ -35,9 +35,10 @@ class Settings:
     azure_openai_api_key: str = ""
     azure_openai_responses_url: str = ""
     azure_openai_standard_model: str = "gpt-5.4-mini"
-    azure_openai_vip_model: str = "gpt-5.4-pro"
+    azure_openai_vip_api_key: str = ""
+    azure_openai_vip_base_url: str = "https://suzhou-gpt6.openai.azure.com/openai/v1"
+    azure_openai_vip_model: str = "gpt-6-astra"
     azure_openai_standard_api_version: str = ""
-    azure_openai_vip_api_version: str = ""
     azure_image_api_url: str = ""
     azure_image_api_key: str = ""
     azure_image_endpoint: str = ""
@@ -108,13 +109,14 @@ class Settings:
             azure_openai_api_key=os.getenv("AZURE_OPENAI_API_KEY", "").strip(),
             azure_openai_responses_url=os.getenv("AZURE_OPENAI_RESPONSES_URL", "").strip(),
             azure_openai_standard_model=os.getenv("AZURE_OPENAI_STANDARD_MODEL", "gpt-5.4-mini").strip(),
-            azure_openai_vip_model=os.getenv("AZURE_OPENAI_VIP_MODEL", "gpt-5.4-pro").strip(),
+            azure_openai_vip_api_key=os.getenv("AZURE_OPENAI_VIP_API_KEY", "").strip(),
+            azure_openai_vip_base_url=os.getenv(
+                "AZURE_OPENAI_VIP_BASE_URL",
+                "https://suzhou-gpt6.openai.azure.com/openai/v1",
+            ).strip().rstrip("/"),
+            azure_openai_vip_model=os.getenv("AZURE_OPENAI_VIP_MODEL", "gpt-6-astra").strip(),
             azure_openai_standard_api_version=_azure_api_version_from_env(
                 "AZURE_OPENAI_STANDARD_API_VERSION",
-                os.getenv("AZURE_OPENAI_RESPONSES_URL", "").strip(),
-            ),
-            azure_openai_vip_api_version=_azure_api_version_from_env(
-                "AZURE_OPENAI_VIP_API_VERSION",
                 os.getenv("AZURE_OPENAI_RESPONSES_URL", "").strip(),
             ),
             azure_image_api_url=os.getenv("AZURE_IMAGE_API_URL", "").strip(),

@@ -54,7 +54,7 @@ class WriterService:
             task_context=normalized_context,
         )
 
-        if self.llm_client.enabled(provider):
+        if self.llm_client.enabled(provider, access_tier):
             strategy_prompt = build_strategy_prompt(
                 category,
                 keyword,
